@@ -1,7 +1,7 @@
 from bs4 import BeautifulSoup
 import os
 
-path = '/media/manu/DATA/Mac/Documents/University/Thesis/Renamed Raw Data/JazzPage_2'
+path = '/media/manu/DATA/Mac/Documents/University/Thesis/Renamed Raw Data/JazzPage'
 
 with open("./data/TheJazzPage.html", encoding="ISO-8859-1") as fp:
     soup = BeautifulSoup(fp, 'html.parser')
