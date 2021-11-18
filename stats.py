@@ -1,8 +1,9 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+version = '0.4'
 
-df = pd.read_csv('data/Thesis - Jazz Dataset - v0.3.csv')
+df = pd.read_csv(f'data/Thesis - Jazz Dataset - v{version}.csv')
 
 df['Song name'] = df['Song name'].str.strip()
 
@@ -17,8 +18,8 @@ impro.loc[:, 'Has Original'] = impro['Song name'].isin(orig['Song name'])
 has_original = impro[impro['Has Original']]
 no_original = impro[~impro['Has Original']]
 
-sns.countplot(x=has_original['Song name'].value_counts())
-plt.show()
+# sns.countplot(x=has_original['Song name'].value_counts())
+# plt.show()
 
 print(f"Complete examples: {has_original['Song name'].shape[0]}")
 print(f"Unique songs: {has_original['Song name'].unique().shape[0]}")
