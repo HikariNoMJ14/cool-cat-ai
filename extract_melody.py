@@ -11,9 +11,8 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-
 def filter_melody(file):
-    print(file)
+    # print(file)
 
     try:
         stream = music21.converter.parse(file, forceSource=True)
@@ -21,6 +20,7 @@ def filter_melody(file):
         parts = stream.parts
 
         melody_track = None
+
         melody_tracks = [p for p in parts if p is not None
                          and p.partName is not None
                          and any(sub in p.partName.lower() for sub in
@@ -49,15 +49,16 @@ def filter_melody(file):
             # bad.write(file)
 
         if melody_track:
-            print(melody_track.partName, len(melody_track.flat.notesAndRests))
+            # print(melody_track.partName, len(melody_track.flat.notesAndRests))
             score = music21.stream.Score()
             score.insert(0, melody_track)
 
-            score.write('midi', fp=file.replace('/media/manu/DATA/Mac/Documents/University/Thesis/Unique Raw Data', './data/Unique Melodies'))
+            score.write('midi', fp=file.replace('Complete Examples', 'Complete Examples Melodies'))
 
-        print('---------')
+        # print('---------')
     except Exception as e:
         print('Can\'t parse midi into stream')
+        print(file)
         print(e)
 
 
@@ -79,7 +80,7 @@ def find_interval(score):
     return interval
 
 
-folder = '/media/manu/DATA/Mac/Documents/University/Thesis/Unique Raw Data/Real Book'
+folder = './data/Complete Examples'
 files = [y for x in os.walk(folder) for y in glob(os.path.join(x[0], '*.mid'))]
 
 transpose = False
@@ -87,11 +88,11 @@ transpose = False
 good_melodies = []
 boh_melodies = []
 
-for f in files:
-    filter_melody(f)
+# for f in files:
+#     filter_melody(f)
 
-# pool = multiprocessing.Pool(50)
-#
-# pool.map(filter_melody, files)
-# pool.close()
-# pool.join()
+pool = multiprocessing.Pool(50)
+
+pool.map(filter_melody, files)
+pool.close()
+pool.join()
