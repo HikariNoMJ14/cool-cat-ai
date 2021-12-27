@@ -6,11 +6,12 @@ version = '0.8'
 
 has_original = pd.read_csv(f'data/has_original_v{version}.csv')
 has_impro = pd.read_csv(f'data/has_impro_v{version}.csv')
+no_impro = pd.read_csv(f'data/no_impro_v{version}.csv')
 
-for idx, row in has_impro.iterrows():
+for idx, row in no_impro.iterrows():
 
     src_filepath = f'/media/manu/DATA/Mac/Documents/University/Thesis/Unique Raw Data/{row["Source"]}/{row["Filename"]}.mid'
-    dst_filepath = f'data/Complete Examples/{row["Source"]}/{row["Filename"]}.mid'
+    dst_filepath = f'data/Complete Examples Maybe/{row["Source"]}/{row["Filename"]}.mid'
 
     try:
         if not os.path.exists(os.path.dirname(dst_filepath)):
