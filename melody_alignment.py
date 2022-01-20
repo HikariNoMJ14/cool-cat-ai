@@ -226,8 +226,6 @@ def align_melody(filename):
 
     melody.find_starting_measure()
 
-    print(melody.starting_measure)
-
     melody.save_aligned_melody()
 
 
