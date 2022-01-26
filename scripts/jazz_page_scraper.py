@@ -3,7 +3,7 @@ import os
 
 path = '/media/manu/DATA/Mac/Documents/University/Thesis/Renamed Raw Data/JazzPage'
 
-with open("./data/TheJazzPage.html", encoding="ISO-8859-1") as fp:
+with open("sources/JazzPage/TheJazzPage.html", encoding="ISO-8859-1") as fp:
     soup = BeautifulSoup(fp, 'html.parser')
 
 for table in soup.body.find_all('table'):

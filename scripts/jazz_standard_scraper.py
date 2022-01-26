@@ -6,7 +6,7 @@ from time import sleep
 path = './data/Raw Data/JazzStandards'
 url = 'https://bhs.minor9.com/midi/jazzstandards/'
 
-with open("./data/bhs.minor9.html", encoding="ISO-8859-1") as fp:
+with open("sources/JazzStandards/bhs.minor9.html", encoding="ISO-8859-1") as fp:
     soup = BeautifulSoup(fp, 'html.parser')
 
 for table in soup.body.find_all('table'):

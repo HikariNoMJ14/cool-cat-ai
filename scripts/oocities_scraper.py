@@ -6,7 +6,7 @@ from time import sleep
 
 path = '/media/manu/DATA/Mac/Documents/University/Thesis/Renamed Raw Data/Oocities'
 
-with open("./data/justjaz3.htm", encoding="ISO-8859-1") as fp:
+with open("sources/Oocities/justjaz3.htm", encoding="ISO-8859-1") as fp:
     soup = BeautifulSoup(fp, 'html.parser')
 
 for a in soup.body.find_all('a'):

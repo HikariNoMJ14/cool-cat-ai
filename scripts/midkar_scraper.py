@@ -6,7 +6,7 @@ from time import sleep
 
 path = '/media/manu/DATA/Mac/Documents/University/Thesis/Renamed Raw Data/MidKar'
 
-with open("./data/MIDKAR.com Jazz MIDI Files U-Z.html", encoding="ISO-8859-1") as fp:
+with open("sources/MidKar/MIDKAR.com Jazz MIDI Files U-Z.html", encoding="ISO-8859-1") as fp:
     soup = BeautifulSoup(fp, 'html.parser')
 
 for a in soup.body.find_all('a'):
