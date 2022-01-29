@@ -17,6 +17,7 @@ for file in irb_files:
 
     chord_prog['key'] = key
     chord_prog['minor'] = minor
+    chord_prog['time_signature'] = file['info']['time']
 
     print(key, minor)
 
