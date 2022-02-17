@@ -2,6 +2,7 @@ import os
 import json
 import re
 from glob import glob
+from datetime import datetime
 
 import music21
 from music21 import converter
@@ -21,25 +22,13 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
-
-def find_chords(filename):
-    synth_filename = filename.replace('standardized', 'synthesized').replace('mid', 'wav')
-
-    synth_midi(filename, synth_filename)
-
-    output_filename = filename.replace('standardized', 'chords')
-
-    capp.transcribe(synth_filename, output=output_filename)
-
-    return output_filename
+from utils import notes_and_chord_to_midi
 
 
 def no_errors(func):
     def inner(*args):
         if len(args[0].errors) == 0:
             func(*args)
-        else:
-            print(args[0].song_name, args[0].errors)
 
     return inner
 
@@ -58,14 +47,17 @@ class Melody:
     scale = None
     saved = False
 
-    final_ticks_per_beats = 12
+    final_ticks_per_beat = 12
+    offset_range_ratio = 0.45
 
     original_sources = ['Real Book']
     alignment_scores_folder = '../data/alignment_scores'
+    split_melody_data_folder = '../data/split_melody_data'
+    split_melody_folder = '../data/split_melody'
 
     def __init__(self, filepath):
         self.errors = []
-        self.note_info = []
+        self.note_info = pd.DataFrame
         self.parts = []
         self.alignment_best_score = []
         self.alignment_all_scores = []
@@ -85,6 +77,7 @@ class Melody:
 
         self.original = self.source in self.original_sources
 
+    @no_errors
     def setup(self):
         try:
             self.mido_obj = MidiFile(self.filepath)
@@ -104,9 +97,11 @@ class Melody:
         if self.chord_progression_time_signature != self.time_signature:
             self.errors.append("Chord progression time signature different from melody time signature ")
 
+    @no_errors
     def save_key(self):
         self.key = self.music21_obj.analyze('key')
 
+    @no_errors
     def save_tempo(self):
         tempos = []
         for i, track in enumerate(self.mido_obj.tracks):
@@ -126,6 +121,7 @@ class Melody:
             else:
                 self.errors.append(f'multiple tempos: {tempos}')
 
+    @no_errors
     def save_time_signature(self):
         time_signatures = []
         for i, track in enumerate(self.mido_obj.tracks):
@@ -144,6 +140,7 @@ class Melody:
             else:
                 self.errors.append(f'multiple time signatures {time_signatures}')
 
+    @no_errors
     def align_key(self):
         inter = music21.interval.Interval(
             music21.pitch.Pitch(self.key.tonic),
@@ -159,39 +156,58 @@ class Melody:
             else:
                 self.transpose_semitones = (inter.semitones - 3) % 12
 
+    @no_errors
     def parse_notes(self):
         time = 0
         tpb = self.mido_obj.ticks_per_beat
 
         notes_on = {}
 
+        tpm = tpb * self.time_signature[0]
+        ftpm = self.final_ticks_per_beat * self.time_signature[0]
+
+        note_info = []
+
         for m in self.mido_obj:
             ticks = int(np.round(mido.second2tick(m.time, tpb, self.tempo)))
             time += ticks
 
-            if m.type == 'note_on':
-                if m.velocity > 0:
-                    if m.note not in notes_on:
-                        notes_on[m.note] = []
+            if m.type != 'note_on':
+                continue
 
-                    notes_on[m.note].append(time)
-                else:
-                    if m.note in notes_on and len(notes_on[m.note]) > 0:
-                        note = {
+            if m.velocity > 0:
+                if m.note not in notes_on:
+                    notes_on[m.note] = []
+
+                notes_on[m.note].append(time)
+            else:
+                if m.note in notes_on and len(notes_on[m.note]) > 0:
+                    note_ticks = int(round((ftpm * notes_on[m.note][0] / tpm)))
+                    note_offset = note_ticks % ftpm
+                    note_measure = int(np.floor(note_ticks / ftpm))
+                    note_duration = int(round(ftpm * (time - notes_on[m.note][0]) / tpm))
+
+                    del notes_on[m.note][0]
+
+                    if note_duration > 0:
+                        note_info.append({
                             'pitch': m.note + self.transpose_semitones,
-                            'ticks': notes_on[m.note][0],
-                            'offset': notes_on[m.note][0] % (tpb * self.time_signature[0]),
-                            'measure': notes_on[m.note][0] / (tpb * self.time_signature[0]),
-                            'duration': time - notes_on[m.note][0]
-                        }
-                        del notes_on[m.note][0]
-                        self.note_info.append(note)
+                            'ticks': note_ticks,
+                            'offset': note_offset,
+                            'measure': note_measure,
+                            'duration': note_duration
+                        })
 
+        self.note_info = pd.DataFrame.from_dict(note_info)
+
+    @no_errors
     def find_starting_measure(self):
         all_scores = []
         all_scores_mean = []
         step = 1 / self.time_signature[0]
-        offset_range = int(np.ceil(self.note_info[-1]['measure']) / step)
+        offset_range = int(
+            (np.ceil(self.note_info.loc[self.note_info.shape[0] - 1, 'measure']) / step) * self.offset_range_ratio)
+        ftpm = self.final_ticks_per_beat * self.time_signature[0]
 
         if not self.chord_progression_minor:
             self.scale = music21.scale.MajorScale(self.chord_progression_key)
@@ -201,20 +217,22 @@ class Melody:
         self.scale = set([x.name for x in self.scale.getPitches()])
 
         for offset in range(offset_range):
-            measure = offset * step
+            position = offset * step
             song_scores = []
 
             for section in self.song_structure['sections']:
                 for chord in self.song_structure['progression'][section]:
-                    pitches = [x['pitch'] for x in self.note_info
-                               if measure <= x['measure'] < measure + step]
+                    pitches = self.note_info[
+                        (self.note_info['measure'] + (self.note_info['offset'] / ftpm) >= position) &
+                        (self.note_info['measure'] + (self.note_info['offset'] / ftpm) < position + step)
+                    ]['pitch'].values
 
                     scores = [self.chord_note_score(chord, pitch) for pitch in pitches]
 
                     score = np.mean(scores) if len(scores) > 0 else 0.33
                     song_scores.append(score)
 
-                    measure += step
+                    position += step
 
             all_scores.append(song_scores)
             all_scores_mean.append(np.nanmean(song_scores))
@@ -238,9 +256,16 @@ class Melody:
             candidate_measures[candidate_measure] += 1
 
         self.starting_measure = list(sorted(candidate_measures.items(), key=lambda item: item[1], reverse=True))[0][0]
-        self.alignment_best_score = all_scores[int(self.starting_measure / step)]
+
+        best_score_index = int(self.starting_measure / step)
+
+        if best_score_index >= len(all_scores):
+            best_score_index = 0
+
+        self.alignment_best_score = all_scores[best_score_index]
         self.alignment_all_scores = all_scores_mean
 
+    @no_errors
     def save_aligned_melody(self):
         first = True
         aligned_mido_obj = MidiFile()
@@ -269,6 +294,13 @@ class Melody:
             self.saved = True
         except Exception as e:
             self.errors.append(e)
+
+    @staticmethod
+    def split_chord(chord_name):
+        chord_obj = Chord(chord_name)
+        chord_notes = [notes.int_to_note(x) for x in np.array(Chord(chord_name).getMIDI()) % 12]
+
+        return chord_obj.root, chord_obj.bassnote, chord_notes
 
     @staticmethod
     def chord_score(c1, c2):
@@ -322,53 +354,66 @@ class Melody:
             return 0
 
     @no_errors
-    def align_melody(self):
-        self.align_key()
-        self.parse_notes()
-        self.find_starting_measure()
-
-        # if np.max(self.alignment_score) >= 0.666 and self.starting_measure < 16:
-        self.save_aligned_melody()
-
-    @no_errors
     def split_melody(self):
         bpm = self.time_signature[0]
-        tpb = self.mido_obj.ticks_per_beat
-        ftpb = self.final_ticks_per_beats
+        ftpm = self.final_ticks_per_beat * bpm
         starting_measure = self.starting_measure
 
-        def normalize(col):
-            return ((col / tpb) * ftpb * bpm).apply(round).apply(int)
+        linear_chord_progression = []
 
-        n_chord_prog_measures = int(np.sum([
-            len(self.song_structure['progression'][section])
-            for section in self.song_structure['sections']]
-        ) / bpm)
+        for section in self.song_structure['sections']:
+            linear_chord_progression += self.song_structure['progression'][section]
 
-        n_measures = int(np.floor(np.max([
-            x['measure'] + ((x['duration'] / tpb) / bpm) for x in self.note_info
-        ])) + 1)
+        n_chord_prog_measures = int(len(linear_chord_progression) / bpm)
+
+        n_measures = self.note_info['measure'].max() + 1
 
         repetition = 1
         lower_bound = starting_measure
         upper_bound = starting_measure + n_chord_prog_measures
 
         while upper_bound <= n_measures:
-            valid_notes = [n for n in self.note_info if
-                           lower_bound <= n['measure'] < upper_bound]
+            valid_notes = self.note_info[
+                (self.note_info['measure'] >= lower_bound) &
+                (self.note_info['measure'] < upper_bound)
+                ]
 
-            notes_df = pd.DataFrame(valid_notes)
+            if len(valid_notes) >= 20:
+                notes_df = pd.DataFrame(valid_notes)
 
-            notes_df['ticks'] -= (notes_df['ticks'].min() - notes_df['ticks'].min() % tpb)
+                notes_df['measure'] = (
+                        notes_df['measure'] -
+                        self.starting_measure -
+                        (n_chord_prog_measures * (repetition - 1))
+                )
+                current_chords = notes_df['measure'].apply(lambda x: linear_chord_progression[int(x * bpm)])
+                chord_info = current_chords.apply(self.split_chord)
 
-            notes_df['ticks'] = normalize(notes_df['ticks'])
-            notes_df['offset'] = normalize(notes_df['offset'])
-            notes_df['duration'] = normalize(notes_df['duration'])
-            notes_df['measure'] = notes_df['measure'].apply(round).apply(int)
+                notes_df['chord_root'] = chord_info.apply(lambda x: x[0])
+                notes_df['chord_bass'] = chord_info.apply(lambda x: x[1])
+                notes_df['chord_notes'] = chord_info.apply(lambda x: x[2])
 
-            notes_df.to_csv(f'../data/split_melody/{self.source}/'
-                            f'{self.filename.replace(".mid", "")}_'
-                            f'{"original" if self.original else repetition}.csv')
+                notes_df['ticks'] -= (notes_df['ticks'].min() - notes_df['ticks'].min() % ftpm)
+
+                split_melody_data_folder = f'{self.split_melody_data_folder}/{self.source}'
+
+                if not os.path.exists(split_melody_data_folder):
+                    os.mkdir(split_melody_data_folder)
+
+                notes_df.to_csv(f'{split_melody_data_folder}/'
+                                f'{self.filename.replace(".mid", "")}_'
+                                f'{"original" if self.original else repetition}.csv')
+
+                split_melody_folder = f'{self.split_melody_folder}/{self.source}'
+
+                if not os.path.exists(split_melody_folder):
+                    os.mkdir(split_melody_folder)
+
+                split_melody_filepath = f'split_melody_folder/' \
+                                        f'{self.filename.replace(".mid", "")}' \
+                                        f'{"" if self.original else repetition}.mid'
+
+                notes_and_chord_to_midi(notes_df, self.song_structure, split_melody_filepath)
 
             repetition += 1
             lower_bound += n_chord_prog_measures
@@ -379,85 +424,28 @@ class Melody:
 
         return True
 
+    def chord_progression_comparison(self):
+        bpm = self.time_signature[0]
 
-if __name__ == "__main__":
-    from datetime import datetime
+        n_chord_prog_measures = int(np.sum([
+            len(self.song_structure['progression'][section])
+            for section in self.song_structure['sections']]
+        ) / bpm)
 
-    folder = '../data/Complete Examples Melodies/Real Book'
+        n_measures = int(self.note_info['measure'].max() + 1)
 
-    # filepaths = [y for x in os.walk(folder) for y in glob(os.path.join(x[0], '*.mid'))]
+        return {
+            'cp_m': n_chord_prog_measures,
+            'n_m': n_measures,
+            'reps': n_measures // n_chord_prog_measures,
+            'remainder': n_measures % n_chord_prog_measures,
+            'starting_measure': self.starting_measure,
+            'songname': self.song_name
+        }
 
-    filepaths = [
-        # '../data/Complete Examples Melodies/Jazz-Midi/All Of Me.mid',
-        # '../data/Complete Examples Melodies/Real Book/All Of Me.mid',
-        # '../data/Complete Examples Melodies/Real Book/All Blues.mid',
-        # '../data/Complete Examples Melodies/Oocities/Come Rain Or Come Shine.mid'
-        # '../data/Complete Examples Melodies/Real Book/A Felicidade.mid'
-        # '../data/Complete Examples Melodies/Real Book/Afro Blue.mid'
-        # '../data/Complete Examples Melodies/Real Book/Autumn Leaves.mid'
-        # '../data/Complete Examples Melodies/Real Book/Ornithology.mid'
-        # '../data/Complete Examples Melodies/Real Book/Margie.mid',
-        # '../data/Complete Examples Melodies/Real Book/Oleo.mid',
-        # '../data/Complete Examples Melodies/Real Book/Blue Train.mid',
-        # '../data/Complete Examples Melodies/Weimar DB/Bix Beiderbecke - Margie.mid',
-        # '../data/Complete Examples Melodies/Weimar DB/Red Garland - Oleo.mid',
-        # '../data/Complete Examples Melodies/Weimar DB/Miles Davis - Oleo (1).mid',
-        # '../data/Complete Examples Melodies/Weimar DB/Miles Davis - Oleo (2).mid',
-        # '../data/Complete Examples Melodies/Weimar DB/John Coltrane - Oleo.mid',
-        # '../data/Complete Examples Melodies/Weimar DB/Lee Morgan - Blue Train.mid',
-        # '../data/Complete Examples Melodies/Weimar DB/Curtis Fuller - Blue Train.mid',
-        # '../data/Complete Examples Melodies/Weimar DB/John Coltrane - Blue Train.mid'
-    ]
-    chord_progressions = {}
-
-    irb_chord_progressions_filepath = '../data/chord_progressions/irb_chord_progressions.json'
-    wdb_chord_progressions_filepath = '../data/chord_progressions/weimar_db.json'
-    manual_chord_progressions_filepath = '../data/chord_progressions/manual_chord_progressions.json'
-
-    chord_progressions.update(json.load(open(irb_chord_progressions_filepath)))
-    chord_progressions.update(json.load(open(wdb_chord_progressions_filepath)))
-    chord_progressions.update(json.load(open(manual_chord_progressions_filepath)))
-
-    song_scores = {}
-
-    no_chords = []
-    errors = {}
-
-    for fp in filepaths:
-        melody = Melody(fp)
-        key = os.path.join(melody.source, melody.filename)
-
-        if melody.song_name in chord_progressions:
-            melody.setup()
-
-            if melody.time_signature is not None and melody.time_signature[0] == 4:
-                melody.set_song_structure(chord_progressions[melody.song_name])
-                melody.align_melody()
-
-                print(melody.song_name, melody.starting_measure)
-
-                melody.split_melody()
-
-                song_scores[key] = {
-                    'melody_key': melody.key.name,
-                    'chord_progression_key': melody.chord_progression_key,
-                    'starting_measure': melody.starting_measure,
-                    'best_score': melody.alignment_best_score,
-                    'all_scores': melody.alignment_all_scores
-                }
-        else:
-            no_chords.append(key)
-
-        if len(melody.errors) > 0:
-            errors[key] = melody.errors
-
-        del melody
-
-    json.dump(song_scores,
-              open(f'../data/alignment_scores/song_scores-{datetime.now().strftime("%d-%m-%Y-%H-%M-%S")}.json', 'w+'))
-
-    json.dump(no_chords,
-              open(f'../data/alignment_scores/no_chords-{datetime.now().strftime("%d-%m-%Y-%H-%M-%S")}.json', 'w+'))
-
-    json.dump(errors,
-              open(f'../data/alignment_scores/errors-{datetime.now().strftime("%d-%m-%Y-%H-%M-%S")}.json', 'w+'))
+    @no_errors
+    def align_melody(self):
+        self.align_key()
+        self.parse_notes()
+        self.find_starting_measure()
+        self.save_aligned_melody()
