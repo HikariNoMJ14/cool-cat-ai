@@ -376,7 +376,7 @@ class Melody:
             valid_notes = self.note_info[
                 (self.note_info['measure'] >= lower_bound) &
                 (self.note_info['measure'] < upper_bound)
-                ]
+            ]
 
             if len(valid_notes) >= 20:
                 notes_df = pd.DataFrame(valid_notes)
@@ -389,6 +389,7 @@ class Melody:
                 current_chords = notes_df['measure'].apply(lambda x: linear_chord_progression[int(x * bpm)])
                 chord_info = current_chords.apply(self.split_chord)
 
+                notes_df['chord_name'] = current_chords
                 notes_df['chord_root'] = chord_info.apply(lambda x: x[0])
                 notes_df['chord_bass'] = chord_info.apply(lambda x: x[1])
                 notes_df['chord_notes'] = chord_info.apply(lambda x: x[2])
@@ -409,9 +410,10 @@ class Melody:
                 if not os.path.exists(split_melody_folder):
                     os.mkdir(split_melody_folder)
 
-                split_melody_filepath = f'split_melody_folder/' \
-                                        f'{self.filename.replace(".mid", "")}' \
-                                        f'{"" if self.original else repetition}.mid'
+                split_melody_filepath = os.path.join(
+                    split_melody_folder,
+                    f'{self.filename.replace(".mid", "")}{"" if self.original else f"_{repetition}"}.mid'
+                )
 
                 notes_and_chord_to_midi(notes_df, self.song_structure, split_melody_filepath)
 
