@@ -575,10 +575,7 @@ def calculate_HC(melody):
         score = 0
 
         cur_chord = chord_names[idx]
-        # cur_chord_obj = Chord(cur_chord)
-
         pitch = replace_enharmonic(notes.int_to_note(pitch % 12))
-
         cur_chord_affinity = get_chord_affinity(cur_chord)
 
         if cur_chord_affinity[pitch] == 'ChT':
@@ -590,7 +587,6 @@ def calculate_HC(melody):
 
             if len(chord_names) > idx + 1 and chord_names[idx + 1] != cur_chord:
                 next_chord = chord_names[idx + 1]
-
                 next_chord_affinity = get_chord_affinity(next_chord)
 
                 next_pitch = replace_enharmonic(notes.int_to_note((notes.note_to_int(pitch) + 1) % 12))
