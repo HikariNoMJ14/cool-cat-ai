@@ -1,4 +1,5 @@
 import os
+import re
 import copy
 
 import pandas as pd
@@ -12,6 +13,14 @@ import mingus.core.notes as notes
 melody_names = ['melody', 'melodia', 'melodía', 'lead']
 non_melody_names = ['bass', 'bajo', 'basso', 'baixo', 'drum', 'percussion', 'batería', 'bateria', 'chord', 'rhythm',
                     'cymbal', 'clap', 'kick', 'snare', 'hh ', 'hats', 'ride', 'kit']
+
+
+def songname_to_filename(filename):
+    songname = filename.replace('.mid', '')
+    songname = re.sub(r' \([0-9]\)', '', songname)
+    songname = re.sub(r'.* - (.*)', r'\1', songname)
+
+    return songname
 
 
 def int_to_pitch(num):
@@ -110,7 +119,6 @@ def midi_to_notes(midi_file: str) -> pd.DataFrame:
 def notes_to_midi(notes: pd.DataFrame,
                   out_file: str,
                   instrument_name: str = "Acoustic Grand Piano") -> pm.PrettyMIDI:
-
     p = pm.PrettyMIDI()
     instrument = pm.Instrument(
         program=pm.instrument_name_to_program(instrument_name)
