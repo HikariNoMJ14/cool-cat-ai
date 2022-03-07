@@ -45,24 +45,21 @@ def filter_instruments(pm_p):
     return filtered_instr
 
 
-def extract_melody_by_index(file, melody_idx):
+def extract_melody_by_index(file, melody_idx, out_path):
     pm_m = pm.PrettyMIDI(file)
 
-    out_path = os.path.join('..', 'data', 'Complete Examples Melodies Manual')
     source = os.path.basename(os.path.dirname(file))
 
     filtered_instr = filter_instruments(pm_m)
     melody_track = filtered_instr[melody_idx]
 
     if not os.path.exists(os.path.join(out_path, source)):
-        os.mkdir(os.path.join(out_path, source))
+        os.makedirs(os.path.join(out_path, source))
 
     out_filename = os.path.join(out_path, source, os.path.basename(file))
 
     pm_melody = copy.deepcopy(pm_m)
     pm_melody.instruments = [melody_track]
-
-    print(melody_track.name)
 
     pm_melody.write(out_filename)
 
