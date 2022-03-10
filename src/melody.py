@@ -1,8 +1,5 @@
 import os
-import json
 import re
-from glob import glob
-from datetime import datetime
 
 import music21
 from music21 import converter
@@ -15,9 +12,6 @@ import mingus.core.notes as notes
 
 from ezchord import Chord
 
-from omnizart.chord import app as capp
-from omnizart.utils import synth_midi
-
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
@@ -29,35 +23,34 @@ def no_errors(func):
     def inner(*args):
         if len(args[0].errors) == 0:
             func(*args)
+        else:
+            print(args[0].song_name, args[0].errors)
 
     return inner
 
 
 class Melody:
-    mido_obj = None
-    music21_obj = None
-    key = None
-    tempo = None
-    time_signature = None
-    starting_measure = None
-    song_structure = None
-    chord_progression_key = None
-    chord_progression_minor = None
-    chord_progression_time_signature = None
-    scale = None
-    saved = False
+    def __init__(self, filepath, version):
+        self.mido_obj = None
+        self.music21_obj = None
+        self.key = None
+        self.tempo = None
+        self.time_signature = None
+        self.starting_measure = None
+        self.song_structure = None
+        self.chord_progression_key = None
+        self.chord_progression_minor = None
+        self.chord_progression_time_signature = None
+        self.scale = None
+        self.saved = False
 
-    final_ticks_per_beat = 12
-    offset_range_ratio = 0.45
+        self.final_ticks_per_beat = 12
+        self.offset_range_ratio = 0.2
 
-    original_sources = ['Real Book']
-    alignment_scores_folder = '../data/alignment_scores'
-    split_melody_data_folder = '../data/split_melody_data'
-    split_melody_folder = '../data/split_melody'
+        self.original_sources = ['Real Book']
 
-    def __init__(self, filepath):
         self.errors = []
-        self.note_info = pd.DataFrame
+        self.note_info = None
         self.parts = []
         self.alignment_best_score = []
         self.alignment_all_scores = []
@@ -67,6 +60,10 @@ class Melody:
         song_name = os.path.basename(filepath).replace('.mid', '')
         song_name = "".join(song_name.split(' - ')[-1])
         song_name = re.sub('\(.*\)', '', song_name).strip()
+
+        self.alignment_scores_folder = f'../data/alignment_scores/v{version}'
+        self.split_melody_data_folder = f'../data/split_melody_data/v{version}'
+        self.split_melody_folder = f'../data/split_melody/v{version}'
 
         self.folder = filepath.split('/')[-3]
         self.source = filepath.split('/')[-2]
@@ -94,6 +91,13 @@ class Melody:
         self.chord_progression_minor = bool(song_structure['minor'])
         self.chord_progression_time_signature = tuple(song_structure['time_signature'])
 
+        if not self.chord_progression_minor:
+            self.scale = music21.scale.MajorScale(self.chord_progression_key)
+        else:
+            self.scale = music21.scale.MinorScale(self.chord_progression_key)
+
+        self.scale = set([x.name for x in self.scale.getPitches()])
+
         if self.chord_progression_time_signature != self.time_signature:
             self.errors.append("Chord progression time signature different from melody time signature ")
 
@@ -119,7 +123,8 @@ class Melody:
             if len(set(tempos)) <= 1:
                 self.tempo = tempos[0]
             else:
-                self.errors.append(f'multiple tempos: {tempos}')
+                self.tempo = tempos[-1] # TODO double-check if this is sensible
+                # self.errors.append(f'multiple tempos: {tempos}')
 
     @no_errors
     def save_time_signature(self):
@@ -149,7 +154,6 @@ class Melody:
 
         if (self.key.mode == 'minor') == self.chord_progression_minor:
             self.transpose_semitones = inter.semitones % 12
-
         else:
             if self.chord_progression_minor:
                 self.transpose_semitones = (inter.semitones + 3) % 12
@@ -182,23 +186,54 @@ class Melody:
                 notes_on[m.note].append(time)
             else:
                 if m.note in notes_on and len(notes_on[m.note]) > 0:
-                    note_ticks = int(round((ftpm * notes_on[m.note][0] / tpm)))
-                    note_offset = note_ticks % ftpm
-                    note_measure = int(np.floor(note_ticks / ftpm))
-                    note_duration = int(round(ftpm * (time - notes_on[m.note][0]) / tpm))
+                    raw_note_ticks = notes_on[m.note][0] / tpm
+                    quant_note_ticks = int(round(ftpm * raw_note_ticks))
+
+                    raw_note_duration = (time - notes_on[m.note][0]) / tpm
+                    quant_note_duration = int(round(ftpm * raw_note_duration))
+
+                    note_offset = quant_note_ticks % ftpm
+
+                    print(note_offset, quant_note_ticks, ftpm)
+
+                    note_measure = int(np.floor(quant_note_ticks / ftpm))
 
                     del notes_on[m.note][0]
 
-                    if note_duration > 0:
+                    if quant_note_duration > 0:
                         note_info.append({
                             'pitch': m.note + self.transpose_semitones,
-                            'ticks': note_ticks,
+                            'raw_ticks': raw_note_ticks,
+                            'quant_ticks': quant_note_ticks,
+                            'raw_duration': raw_note_duration,
+                            'quant_duration': quant_note_duration,
                             'offset': note_offset,
-                            'measure': note_measure,
-                            'duration': note_duration
+                            'measure': note_measure
                         })
 
         self.note_info = pd.DataFrame.from_dict(note_info)
+
+    def calculate_alignment_score(self, offset):
+        song_scores = []
+        step = 1 / self.time_signature[0]
+        ftpm = self.final_ticks_per_beat * self.time_signature[0]
+        position = offset * step
+
+        for section in self.song_structure['sections']:
+            for chord in self.song_structure['progression'][section]:
+                pitches = self.note_info[
+                    (self.note_info['measure'] + (self.note_info['offset'] / ftpm) >= position) &
+                    (self.note_info['measure'] + (self.note_info['offset'] / ftpm) < position + step)
+                    ]['pitch'].values
+
+                scores = [self.chord_note_score(chord, pitch) for pitch in pitches]
+
+                score = np.mean(scores) if len(scores) > 0 else 0.33
+                song_scores.append(score)
+
+                position += step
+
+        return song_scores
 
     @no_errors
     def find_starting_measure(self):
@@ -208,13 +243,6 @@ class Melody:
         offset_range = int(
             (np.ceil(self.note_info.loc[self.note_info.shape[0] - 1, 'measure']) / step) * self.offset_range_ratio)
         ftpm = self.final_ticks_per_beat * self.time_signature[0]
-
-        if not self.chord_progression_minor:
-            self.scale = music21.scale.MajorScale(self.chord_progression_key)
-        else:
-            self.scale = music21.scale.MinorScale(self.chord_progression_key)
-
-        self.scale = set([x.name for x in self.scale.getPitches()])
 
         for offset in range(offset_range):
             position = offset * step
@@ -237,11 +265,14 @@ class Melody:
             all_scores.append(song_scores)
             all_scores_mean.append(np.nanmean(song_scores))
 
+        if not os.path.exists(os.path.join(self.alignment_scores_folder, self.source)):
+            os.makedirs(os.path.join(self.alignment_scores_folder, self.source))
+
         plt.plot(all_scores_mean)
         plt.savefig(os.path.join(self.alignment_scores_folder, self.source, self.filename.replace('.mid', '.png')))
-        plt.close()
-        plt.cla()
-        plt.clf()
+        # plt.close()
+        # plt.cla()
+        # plt.clf()
 
         candidates = np.array(sorted(range(len(all_scores_mean)), key=lambda i: all_scores_mean[i], reverse=True)[:12])
 
@@ -394,7 +425,8 @@ class Melody:
                 notes_df['chord_bass'] = chord_info.apply(lambda x: x[1])
                 notes_df['chord_notes'] = chord_info.apply(lambda x: x[2])
 
-                notes_df['ticks'] -= (notes_df['ticks'].min() - notes_df['ticks'].min() % ftpm)
+                notes_df['raw_ticks'] -= notes_df['raw_ticks'].min() - notes_df['raw_ticks'].min()
+                notes_df['quant_ticks'] -= (notes_df['quant_ticks'].min() - notes_df['quant_ticks'].min() % ftpm)
 
                 split_melody_data_folder = f'{self.split_melody_data_folder}/{self.source}'
 

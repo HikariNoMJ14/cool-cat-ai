@@ -3,36 +3,8 @@ import json
 from glob import glob
 from datetime import datetime
 
-
-from omnizart.chord import app as capp
-from omnizart.utils import synth_midi
-
 from melody import Melody
-
-
-def find_chords(filename):
-    synth_filename = filename.replace('standardized', 'synthesized').replace('mid', 'wav')
-
-    synth_midi(filename, synth_filename)
-
-    output_filename = filename.replace('standardized', 'chords')
-
-    capp.transcribe(synth_filename, output=output_filename)
-
-    return output_filename
-
-
-def get_chord_progressions():
-    irb_chord_progressions_filepath = '../data/chord_progressions/irb_chord_progressions.json'
-    wdb_chord_progressions_filepath = '../data/chord_progressions/weimar_db.json'
-    manual_chord_progressions_filepath = '../data/chord_progressions/manual_chord_progressions.json'
-
-    chord_progressions = {}
-    chord_progressions.update(json.load(open(irb_chord_progressions_filepath)))
-    chord_progressions.update(json.load(open(wdb_chord_progressions_filepath)))
-    chord_progressions.update(json.load(open(manual_chord_progressions_filepath)))
-
-    return chord_progressions
+from utils import get_chord_progressions
 
 
 if __name__ == "__main__":

@@ -20,11 +20,13 @@ def copy_files(data, src_folder, dst_folder):
 
 if __name__ == "__main__":
     has_original = pd.read_csv(f'../../data/intermediate_csvs/v{version}/has_original_v{version}.csv')
+    has_impro = pd.read_csv(f'../../data/intermediate_csvs/v{version}/has_impro_v{version}.csv')
 
     src_filepath = f'../../data/Unique Raw Data/v{version}'
     dst_filepath = f'../../data/Complete Examples/v{version}'
 
     copy_files(has_original, src_filepath, dst_filepath)
+    copy_files(has_impro, src_filepath, dst_filepath)
 
     no_impro = pd.read_csv(f'../../data/intermediate_csvs/v{version}/no_original_v{version}.csv')
 

@@ -1,6 +1,7 @@
 import os
 import re
 import copy
+import json
 
 import pandas as pd
 import numpy as np
@@ -14,8 +15,38 @@ melody_names = ['melody', 'melodia', 'melodía', 'lead']
 non_melody_names = ['bass', 'bajo', 'basso', 'baixo', 'drum', 'percussion', 'batería', 'bateria', 'chord', 'rhythm',
                     'cymbal', 'clap', 'kick', 'snare', 'hh ', 'hats', 'ride', 'kit']
 
+bass_programs = list(range(32, 40))
+ensemble_programs = list(range(48, 56))
+pad_programs = list(range(88, 96))
+synth_effect_programs = list(range(96, 104))
+percussive_programs = list(range(112, 120))
+sound_effect_programs = list(range(120, 128))
 
-def songname_to_filename(filename):
+non_melody_programs = bass_programs + \
+                      ensemble_programs + \
+                      pad_programs + \
+                      synth_effect_programs + \
+                      percussive_programs + \
+                      sound_effect_programs
+
+
+# not working properly
+def find_chords(filename):
+    from omnizart.chord import app as capp
+    from omnizart.utils import synth_midi
+
+    synth_filename = filename.replace('standardized', 'synthesized').replace('mid', 'wav')
+
+    synth_midi(filename, synth_filename)
+
+    output_filename = filename.replace('standardized', 'chords')
+
+    capp.transcribe(synth_filename, output=output_filename)
+
+    return output_filename
+
+
+def filename_to_songname(filename):
     songname = filename.replace('.mid', '')
     songname = re.sub(r' \([0-9]\)', '', songname)
     songname = re.sub(r'.* - (.*)', r'\1', songname)
@@ -34,10 +65,10 @@ def int_to_pitch(num):
     return f"{pitch}{octave}"
 
 
-def filter_instruments(pm_p):
+def filter_instruments_old(pm_p):
     filtered_instr = [
         i for i in pm_p.instruments
-        if i.is_drum == False
+        if not i.is_drum
            and all(
             sub not in i.name.lower() for sub in non_melody_names
         )]
@@ -45,12 +76,36 @@ def filter_instruments(pm_p):
     return filtered_instr
 
 
+def filter_instruments_new(pm_p):
+    filtered_instr = [
+        i for i in pm_p.instruments
+        if not i.is_drum
+           and i.program not in non_melody_programs
+           and all(sub not in i.name.lower() for sub in non_melody_names)
+    ]
+
+    return filtered_instr
+
+
+def get_melody_tracks(pm_p):
+    melody_tracks = [i for i in pm_p.instruments if 'solo' in i.name.lower()]
+
+    if len(melody_tracks) == 0:
+        melody_tracks = [
+            i for i in pm_p.instruments
+            if any(
+                sub in i.name.lower() for sub in melody_names
+            )]
+
+    return melody_tracks
+
+
 def extract_melody_by_index(file, melody_idx, out_path):
     pm_m = pm.PrettyMIDI(file)
 
     source = os.path.basename(os.path.dirname(file))
 
-    filtered_instr = filter_instruments(pm_m)
+    filtered_instr = filter_instruments_old(pm_m)
     melody_track = filtered_instr[melody_idx]
 
     if not os.path.exists(os.path.join(out_path, source)):
@@ -70,7 +125,7 @@ def extract_melody_by_name(file, melody_name, melody_name_idx=0):
     out_path = os.path.join('..', 'data', 'Complete Examples Melodies Manual')
     source = os.path.basename(os.path.dirname(file))
 
-    filtered_instr = filter_instruments(pm_m)
+    filtered_instr = filter_instruments_old(pm_m)
 
     melody_tracks = [i for i in filtered_instr if melody_name in i.name.lower()]
     melody_track = melody_tracks[melody_name_idx]
@@ -83,9 +138,20 @@ def extract_melody_by_name(file, melody_name, melody_name_idx=0):
     pm_melody = copy.deepcopy(pm_m)
     pm_melody.instruments = [melody_track]
 
-    print(melody_track.name)
-
     pm_melody.write(out_filename)
+
+
+def get_chord_progressions():
+    irb_chord_progressions_filepath = '../data/chord_progressions/irb_chord_progressions.json'
+    wdb_chord_progressions_filepath = '../data/chord_progressions/weimar_db.json'
+    manual_chord_progressions_filepath = '../data/chord_progressions/manual_chord_progressions.json'
+
+    chord_progressions = {}
+    chord_progressions.update(json.load(open(irb_chord_progressions_filepath)))
+    chord_progressions.update(json.load(open(wdb_chord_progressions_filepath)))
+    chord_progressions.update(json.load(open(manual_chord_progressions_filepath)))
+
+    return chord_progressions
 
 
 def midi_to_notes(midi_file: str) -> pd.DataFrame:
@@ -139,6 +205,7 @@ def notes_to_midi(notes: pd.DataFrame,
 def notes_and_chord_to_midi(
         notes: pd.DataFrame,
         chord_progression: dict,
+        quantized: bool,
         out_file: str) -> pm.PrettyMIDI:
     instrument_name = "Acoustic Grand Piano"
 
@@ -152,12 +219,15 @@ def notes_and_chord_to_midi(
         name="chords"
     )
 
+    ticks_col = "quant_ticks" if quantized else "raw_ticks"
+    durations_col = "quant_duration" if quantized else "raw_duration"
+
     for i, note in notes.iterrows():
         note = pm.Note(
             velocity=127,
             pitch=int(note["pitch"]),
-            start=note["ticks"] / 24,
-            end=(note["ticks"] + note['duration']) / 24,
+            start=note[ticks_col] / 24,
+            end=(note[ticks_col] + note[durations_col]) / 24,
         )
         melody.notes.append(note)
 

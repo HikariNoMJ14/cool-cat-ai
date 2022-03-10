@@ -5,25 +5,8 @@ from glob import glob
 import pandas as pd
 import re
 import copy
-import shutil
 
-melody_names = ['melody', 'melodia', 'melodía', 'lead']
-non_melody_names = ['bass', 'bajo', 'basso', 'baixo', 'drum', 'percussion', 'batería', 'bateria', 'chord', 'rhythm',
-                    'cymbal', 'clap', 'kick', 'snare', 'hh ', 'hats', 'ride', 'kit']
-
-bass_programs = list(range(32, 40))
-ensemble_programs = list(range(48, 56))
-pad_programs = list(range(88, 96))
-synth_effect_programs = list(range(96, 104))
-percussive_programs = list(range(112, 120))
-sound_effect_programs = list(range(120, 128))
-
-non_melody_programs = bass_programs + \
-                      ensemble_programs + \
-                      pad_programs + \
-                      synth_effect_programs + \
-                      percussive_programs + \
-                      sound_effect_programs
+from utils import filter_instruments_new, get_melody_tracks
 
 
 def get_channels(m):
@@ -57,30 +40,6 @@ def get_programs_pm(m):
         programs.append(tuple([i.program, i.is_drum]))
 
     return programs
-
-
-def filter_instruments(pm_p):
-    filtered_instr = [
-        i for i in pm_p.instruments
-        if not i.is_drum
-           and i.program not in non_melody_programs
-           and all(sub not in i.name.lower() for sub in non_melody_names)
-    ]
-
-    return filtered_instr
-
-
-def get_melody_tracks(pm_p):
-    melody_tracks = [i for i in pm_p.instruments if 'solo' in i.name.lower()]
-
-    if len(melody_tracks) == 0:
-        melody_tracks = [
-            i for i in pm_p.instruments
-            if any(
-                sub in i.name.lower() for sub in melody_names
-            )]
-
-    return melody_tracks
 
 
 def extract(file):
@@ -140,7 +99,7 @@ def extract(file):
         melody_tracks = get_melody_tracks(pm_m)
         n_instr = len(pm_m.instruments)
 
-        filtered_instr = filter_instruments(pm_m)
+        filtered_instr = filter_instruments_new(pm_m)
         candidate_names = [i.name for i in filtered_instr]
 
         if n_instr == 1:
