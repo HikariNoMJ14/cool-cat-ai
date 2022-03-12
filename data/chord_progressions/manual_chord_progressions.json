@@ -300,6 +300,7 @@
   "In Your Own Sweet Way": {
     "sections": [
       "A",
+      "A",
       "B",
       "A",
       "C"
@@ -408,7 +409,7 @@
         "Ab7sus"
       ]
     },
-    "key": "Eb",
+    "key": "Bb",
     "minor": false,
     "time_signature": [4,4]
   },

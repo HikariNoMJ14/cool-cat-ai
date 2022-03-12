@@ -10837,7 +10837,6 @@
   },
   "Beauty And The Beast": {
     "sections": [
-      "Intro",
       "A",
       "N1",
       "A",
@@ -30572,11 +30571,6 @@
   },
   "Daahoud": {
     "sections": [
-      "A",
-      "A",
-      "B",
-      "A2",
-      "ToCod",
       "A",
       "A",
       "B",
@@ -82034,15 +82028,7 @@
       "A",
       "N2",
       "B",
-      "A2",
-      "ToCod",
-      "A",
-      "N1",
-      "A",
-      "N2",
-      "B",
-      "A2",
-      "Coda"
+      "A2"
     ],
     "progression": {
       "A": [
@@ -91837,8 +91823,7 @@
       "B",
       "ToCod",
       "A",
-      "B",
-      "Coda"
+      "B"
     ],
     "progression": {
       "A": [
@@ -117561,11 +117546,7 @@
       "N1",
       "A",
       "N2",
-      "B",
-      "A",
-      "N1",
-      "A",
-      "N2"
+      "B"
     ],
     "progression": {
       "A": [
@@ -119271,15 +119252,7 @@
       "A",
       "N2",
       "B",
-      "A2",
-      "ToCod",
-      "A",
-      "N1",
-      "A",
-      "N2",
-      "B",
-      "A2",
-      "Coda"
+      "A2"
     ],
     "progression": {
       "A": [
