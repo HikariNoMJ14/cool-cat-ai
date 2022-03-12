@@ -141,10 +141,13 @@ def extract_melody_by_name(file, melody_name, melody_name_idx=0):
     pm_melody.write(out_filename)
 
 
-def get_chord_progressions():
-    irb_chord_progressions_filepath = '../data/chord_progressions/irb_chord_progressions.json'
-    wdb_chord_progressions_filepath = '../data/chord_progressions/weimar_db.json'
-    manual_chord_progressions_filepath = '../data/chord_progressions/manual_chord_progressions.json'
+def get_chord_progressions(src_folder='../..'):
+    irb_chord_progressions_filepath = os.path.join(
+        src_folder, 'data/chord_progressions/irb_chord_progressions.json')
+    wdb_chord_progressions_filepath = os.path.join(
+        src_folder, 'data/chord_progressions/weimar_db.json')
+    manual_chord_progressions_filepath = os.path.join(
+        src_folder, 'data/chord_progressions/manual_chord_progressions.json')
 
     chord_progressions = {}
     chord_progressions.update(json.load(open(irb_chord_progressions_filepath)))
@@ -207,27 +210,41 @@ def notes_and_chord_to_midi(
         chord_progression: dict,
         quantized: bool,
         out_file: str) -> pm.PrettyMIDI:
-    instrument_name = "Acoustic Grand Piano"
+    melody_instrument_name = "Acoustic Grand Piano"
+    chord_instrument_name = "Tenor Sax"
+
+    #     print(notes)
 
     p = pm.PrettyMIDI()
     melody = pm.Instrument(
-        program=pm.instrument_name_to_program(instrument_name),
+        program=pm.instrument_name_to_program(chord_instrument_name),
         name="melody"
     )
     chords = pm.Instrument(
-        program=pm.instrument_name_to_program(instrument_name),
+        program=pm.instrument_name_to_program(melody_instrument_name),
         name="chords"
     )
 
-    ticks_col = "quant_ticks" if quantized else "raw_ticks"
-    durations_col = "quant_duration" if quantized else "raw_duration"
+    if quantized:
+        ticks_col = "quant_ticks"
+        durations_col = "quant_duration"
+
+        multiplier = 1 / 24
+    else:
+        ticks_col = "raw_ticks"
+        durations_col = "raw_duration"
+
+        multiplier = 1
 
     for i, note in notes.iterrows():
+        start = note[ticks_col] * multiplier
+        end = (note[ticks_col] + note[durations_col]) * multiplier
+
         note = pm.Note(
             velocity=127,
             pitch=int(note["pitch"]),
-            start=note[ticks_col] / 24,
-            end=(note[ticks_col] + note[durations_col]) / 24,
+            start=start,
+            end=end,
         )
         melody.notes.append(note)
 
@@ -237,8 +254,8 @@ def notes_and_chord_to_midi(
     use_tonic = True
 
     for section in chord_progression['sections']:
-        for chord in chord_progression['progression'][section]:
-            chord_notes = Chord(chord).getMIDI()
+        for chord_name in chord_progression['progression'][section]:
+            chord_notes = Chord(chord_name).getMIDI()
 
             if use_tonic:
                 note = pm.Note(
@@ -248,6 +265,11 @@ def notes_and_chord_to_midi(
                     end=start + 0.5,
                 )
                 chords.notes.append(note)
+
+                # Add chord annotation
+                chord_annotation = pm.Lyric(chord_name, start)
+
+                p.lyrics.append(chord_annotation)
             else:
                 for chord_note in chord_notes[1:]:
                     note = pm.Note(

@@ -474,14 +474,26 @@ def replace_enharmonic(pitch):
         return 'Eb'
     if pitch == 'Fb':
         return 'E'
+    if pitch == 'D##':
+        return 'E'
     if pitch == 'E#':
         return 'F'
+    if pitch == 'E##':
+        return 'F#'
     if pitch == 'Gb':
         return 'F#'
+    if pitch == 'F##':
+        return 'G'
     if pitch == 'G#':
         return 'Ab'
+    if pitch == 'G##':
+        return 'B'
+    if pitch == 'Bbb':
+        return 'B'
     if pitch == 'A#':
         return 'Bb'
+    if pitch == 'A##':
+        return 'B'
     if pitch == 'Cb':
         return 'B'
     if pitch == 'B#':
@@ -505,14 +517,22 @@ def get_chord_affinity(chord_name):
         else:
             chord_affinity[pc] = 'NaN'
 
+    chord_root = replace_enharmonic(chord_obj.root)
+
     if chord_obj.mode.name == 'MAJ':
-        scale = scales.Major(chord_obj.root)
+        scale = scales.Major(chord_root)
     elif chord_obj.mode.name == 'DOM':
-        scale = scales.Mixolydian(chord_obj.root)
+        scale = scales.Mixolydian(chord_root)
     elif chord_obj.mode.name == 'MIN':
-        scale = scales.Dorian(chord_obj.root)
+        scale = scales.Dorian(chord_root)
     elif chord_obj.mode.name == 'DIM':
-        scale = scales.HarmonicMinor(chord_obj.root)
+        scale = scales.HarmonicMinor(chord_root)
+    elif chord_obj.mode.name == 'AUG':
+        scale = scales.Major(chord_root)
+    elif chord_obj.mode.name == 'SUS':
+        scale = scales.Major(chord_root)
+    else:
+        print('WEEE ' + chord_name + ' ' + chord_obj.mode.name)
 
     scale_notes = scale.ascending()
 
@@ -532,7 +552,11 @@ def get_chord_affinity(chord_name):
         scale_notes[1] = notes.int_to_note((notes.note_to_int(scale_notes[1]) + 1) % 12)
     if '#11' in chord_name:
         scale_notes[3] = notes.int_to_note((notes.note_to_int(scale_notes[3]) + 1) % 12)
+    if 'sus' in chord_name:
+        scale_notes[3] = notes.int_to_note((notes.note_to_int(scale_notes[3]) + 1) % 12)
     if '#5' in chord_name:
+        scale_notes[4] = notes.int_to_note((notes.note_to_int(scale_notes[4]) + 1) % 12)
+    if '+' in chord_name:
         scale_notes[4] = notes.int_to_note((notes.note_to_int(scale_notes[4]) + 1) % 12)
     if '#13' in chord_name:
         scale_notes[5] = notes.int_to_note((notes.note_to_int(scale_notes[5]) + 1) % 12)
@@ -598,7 +622,7 @@ def calculate_HC(melody):
 
         harmonic_consistency.append(score)
 
-    return np.mean(harmonic_consistency)
+    return harmonic_consistency
 
 
 def get_sequences_onefile(allpath, MAX_SEQ_DUR_LENGTH):
