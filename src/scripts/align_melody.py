@@ -2,6 +2,8 @@ import os
 import json
 from glob import glob
 from datetime import datetime
+
+import music21.key
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -19,7 +21,6 @@ if __name__ == "__main__":
     folder = f'../../data/Complete Examples Melodies Auto/v{version}/Real Book'
 
     filepaths = [y for x in os.walk(folder) for y in glob(os.path.join(x[0], '*.mid'))]
-
 
     # filepaths = [
         # 'f'../data/Complete Examples Melodies Auto/Jazz-Midi/All Of Me.mid',
@@ -43,6 +44,20 @@ if __name__ == "__main__":
         # f'../../data/Complete Examples Melodies Auto/v{version}/Real Book/In Your Own Sweet Way.mid',
         # f'../../data/Complete Examples Melodies Auto/v{version}/Real Book/Lazy Bird.mid',
         # f'../../data/Complete Examples Melodies Auto/v{version}/Real Book/Recado Bossa Nova.mid',
+        # f'../../data/Complete Examples Melodies Auto/v{version}/Real Book/Giant Steps.mid',
+        # f'../../data/Complete Examples Melodies Auto/v{version}/Real Book/Dolores.mid',
+        # f'../../data/Complete Examples Melodies Auto/v{version}/Real Book/Epistrophy.mid',
+        # f'../../data/Complete Examples Melodies Auto/v{version}/Real Book/Speak No Evil.mid',
+        # f'../../data/Complete Examples Melodies Auto/v{version}/Real Book/Monk\'s Mood.mid',
+        # f'../../data/Complete Examples Melodies Auto/v{version}/Real Book/Beautiful Friendship.mid',
+        # f'../../data/Complete Examples Melodies Auto/v{version}/Real Book/House Of Jade.mid',
+        # f'../../data/Complete Examples Melodies Auto/v{version}/Real Book/Equinox.mid',
+        # f'../../data/Complete Examples Melodies Auto/v{version}/Real Book/Ruby My Dear.mid',
+        # f'../../data/Complete Examples Melodies Auto/v{version}/Real Book/Margie.mid',
+        # f'../../data/Complete Examples Melodies Auto/v{version}/Real Book/Esp.mid',
+        # f'../../data/Complete Examples Melodies Auto/v{version}/Real Book/Laura.mid',
+        # f'../../data/Complete Examples Melodies Auto/v{version}/Real Book/In A Mellow Tone.mid',
+        # f'../../data/Complete Examples Melodies Auto/v{version}/Real Book/Come Sunday.mid',
         # 'f'../data/Complete Examples Melodies Auto/v{version}/Real Book/Alice In Wonderland.mid',
         # 'f'../data/Complete Examples Melodies Auto/Weimar DB/Bix Beiderbecke - Margie.mid',
         # 'f'../data/Complete Examples Melodies Auto/Weimar DB/Red Garland - Oleo.mid',
@@ -53,19 +68,32 @@ if __name__ == "__main__":
         # 'f'../data/Complete Examples Melodies Auto/Weimar DB/Curtis Fuller - Blue Train.mid',
         # 'f'../data/Complete Examples Melodies Auto/Weimar DB/John Coltrane - Blue Train.mid'
     # ]
+
     all_results = []
     errors = {}
 
     cp = get_chord_progressions()
-    starting_measure = 2
 
-    exceptions = {
+    starting_measure_exceptions = {
         'Real Book - Beauty And The Beast': 5
+    }
+
+    key_exceptions = {
+        'Real Book - Dolores': ('Db', 'major'),
+        'Real Book - Epistrophy': ('Db', 'major'),
+        'Real Book - Giant Steps': ('B', 'major'),
+        'Real Book - Speak No Evil': ('C', 'minor'),
+        'Real Book - Monk\'s Mood': ('Db', 'major'),
+        'Real Book - Beautiful Friendship': ('Db', 'major'),
+        'Real Book - House Of Jade': ('C', 'minor'),
+        'Real Book - Laura': ('C', 'major'),
+        'Real Book - In A Mellow Tone': ('F', 'major'),
+        'Real Book - Come Sunday': ('Bb', 'major'),
     }
 
     for fp in filepaths:
         melody = Melody(fp, version)
-        key = os.path.join(melody.source, melody.filename)
+        dict_key = os.path.join(melody.source, melody.filename)
 
         melody.setup()
 
@@ -81,22 +109,32 @@ if __name__ == "__main__":
         elif melody.time_signature[0] != 4:
             melody.errors.append('time signature not 4/4')
 
-        if f'{melody.source} - {melody.song_name}' in exceptions:
-            starting_measure = exceptions[f'{melody.source} - {melody.song_name}']
+        starting_measure = 2
+
+        if f'{melody.source} - {melody.song_name}' in starting_measure_exceptions:
+            starting_measure = starting_measure_exceptions[f'{melody.source} - {melody.song_name}']
             print(f'Using {starting_measure} for {melody.source} - {melody.song_name}')
+
+        if f'{melody.source} - {melody.song_name}' in key_exceptions:
+            tonic = key_exceptions[f'{melody.source} - {melody.song_name}'][0]
+            mode = key_exceptions[f'{melody.source} - {melody.song_name}'][1]
+
+            melody.key = music21.key.Key(tonic, mode)
+            print(f'Using {melody.key.tonic} for {melody.source} - {melody.song_name}')
 
         melody.manually_align(starting_measure, quantized)
 
         if len(melody.errors) > 0:
-            errors[key] = melody.errors
+            errors[dict_key] = melody.errors
         else:
             results = melody.chord_progression_comparison()
             results.update({
                 'source': melody.source,
                 'filename': melody.filename,
+                'starting_measure': melody.starting_measure,
                 'melody_mido_key': melody.mido_key,
-                'melody_music_21_key': melody.music21_key,
-                'melody_music_21_key2': melody.music21_key2,
+                # 'melody_music_21_key': melody.music21_key,
+                # 'melody_music_21_key2': melody.music21_key2,
                 'chord_progression_key': melody.chord_progression_key + 'm'
                 if melody.chord_progression_minor
                 else melody.chord_progression_key,
