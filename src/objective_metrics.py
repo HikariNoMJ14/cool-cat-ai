@@ -625,6 +625,39 @@ def calculate_HC(melody):
     return harmonic_consistency
 
 
+def calculate_silence_ratio(melody_data):
+    n_measures = melody_data['measure'].unique()[-1]
+    c = np.zeros(n_measures)
+    previous = None
+
+    for measure in range(n_measures):
+        current = melody_data[melody_data['measure'] == measure]
+
+        if len(current) > 0:
+            c[measure] = 1
+
+        if previous is not None:
+            end_offset = (previous['offset'] + previous['duration']) / 48
+            long_notes = end_offset[end_offset >= 1]
+
+            if len(long_notes) > 0:
+                c[measure] = 1
+                longer_notes = end_offset[end_offset >= 2]
+
+                if len(longer_notes) > 0:
+                    if len(c) > measure + 1:
+                        c[measure + 1] = 1
+                    longest_notes = end_offset[end_offset >= 2]
+
+                    if len(longest_notes) > 0:
+                        if len(c) > measure + 2:
+                            c[measure + 2] = 1
+
+        previous = current
+
+    return 1 - c.mean()
+
+
 def get_sequences_onefile(allpath, MAX_SEQ_DUR_LENGTH):
     MIDI_MAX = 108
     MIDI_MIN = 36

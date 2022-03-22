@@ -11,6 +11,8 @@ from ezchord import Chord
 import pretty_midi as pm
 import mingus.core.notes as notes
 
+from objective_metrics import calculate_HC, calculate_silence_ratio
+
 melody_names = ['melody', 'melodia', 'melodía', 'lead']
 non_melody_names = ['bass', 'bajo', 'basso', 'baixo', 'drum', 'percussion', 'batería', 'bateria', 'chord', 'rhythm',
                     'cymbal', 'clap', 'kick', 'snare', 'hh ', 'hats', 'ride', 'kit']
@@ -210,18 +212,18 @@ def notes_and_chord_to_midi(
         chord_progression: dict,
         quantized: bool,
         out_file: str) -> pm.PrettyMIDI:
-    melody_instrument_name = "Acoustic Grand Piano"
-    chord_instrument_name = "Tenor Sax"
+    melody_instrument_name = "Tenor Sax"
+    chord_instrument_name = "Acoustic Grand Piano"
 
     #     print(notes)
 
     p = pm.PrettyMIDI()
     melody = pm.Instrument(
-        program=pm.instrument_name_to_program(chord_instrument_name),
+        program=pm.instrument_name_to_program(melody_instrument_name),
         name="melody"
     )
     chords = pm.Instrument(
-        program=pm.instrument_name_to_program(melody_instrument_name),
+        program=pm.instrument_name_to_program(chord_instrument_name),
         name="chords"
     )
 
@@ -288,6 +290,41 @@ def notes_and_chord_to_midi(
     p.write(out_file)
 
     return p
+
+
+def calculate_melody_results(melody):
+    all_results = {}
+    for i, melody_info in enumerate(melody.split_note_info):
+        results = melody.chord_progression_comparison()
+        results.update({
+            'source': melody.source,
+            'in_filename': f'{melody.filename}',
+            'out_filename': f'{melody.filename.replace(".mid", "")} -{i + 1 if not melody.original else "o"}-.mid',
+            'starting_measure': melody.starting_measure,
+            'melody_mido_key': melody.mido_key,
+            'chord_progression_key': melody.chord_progression_key + 'm'
+            if melody.chord_progression_minor
+            else melody.chord_progression_key,
+            'transpose_semitones': melody.transpose_semitones
+        })
+
+        sr = calculate_silence_ratio(melody_info)
+        results['silence_ratio'] = sr
+
+        if len(melody.split_note_info) > 0:
+            hc = calculate_HC(melody_info)
+            results['harmonic_consistency'] = hc
+            results['harmonic_consistency_mean'] = np.mean(hc)
+            results['harmonic_consistency_var'] = np.var(hc)
+        else:
+            results['harmonic_consistency'] = []
+            results['harmonic_consistency_mean'] = np.nan
+            results['harmonic_consistency_var'] = np.nan
+
+        all_results[i] = results
+
+    return all_results
+
 
 # if __name__ == "__main__":
 # for i in range(128):
