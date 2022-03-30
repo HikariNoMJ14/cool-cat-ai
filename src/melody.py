@@ -183,6 +183,8 @@ class Melody:
                 else:
                     self.transpose_semitones = (inter.semitones - 3) % 12
 
+            self.transpose_semitones -= 6
+
     @no_errors
     def parse_notes(self):
         time = 0
