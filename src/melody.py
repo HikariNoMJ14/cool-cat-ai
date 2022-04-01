@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from utils import notes_and_chord_to_midi
+from utils import notes_and_chord_to_midi, flatten_chord_progression
 from objective_metrics import replace_enharmonic
 
 
@@ -45,6 +45,8 @@ class Melody:
         self.chord_progression_key = None
         self.chord_progression_minor = None
         self.chord_progression_time_signature = None
+        self.flat_chord_progression = []
+        self.n_chord_prog_measures = None
         self.scale = None
         self.min_measure = None
         self.max_measure = None
@@ -106,6 +108,9 @@ class Melody:
 
         self.scale = set([x.name for x in self.scale.getPitches()])
 
+        self.flat_chord_progression = flatten_chord_progression(self.song_structure)
+        self.n_chord_prog_measures = int(len(self.flat_chord_progression) / self.time_signature[0])
+
         if self.chord_progression_time_signature != self.time_signature:
             self.errors.append("Chord progression time signature different from melody time signature ")
 
@@ -137,7 +142,7 @@ class Melody:
 
         if len(tempos) == 0:
             self.errors.append('no tempo detected')
-            self.tempo = 500000
+            self.tempo = 600000
         elif len(tempos) == 1:
             self.tempo = tempos[0]
         else:
@@ -176,18 +181,19 @@ class Melody:
             )
 
             if (self.key.mode == 'minor') == self.chord_progression_minor:
-                self.transpose_semitones = inter.semitones % 12
+                self.transpose_semitones = inter.semitones
             else:
                 if self.chord_progression_minor:
-                    self.transpose_semitones = (inter.semitones + 3) % 12
+                    self.transpose_semitones = (inter.semitones + 3)
                 else:
-                    self.transpose_semitones = (inter.semitones - 3) % 12
+                    self.transpose_semitones = (inter.semitones - 3)
 
-            self.transpose_semitones -= 6
+            self.transpose_semitones = ((self.transpose_semitones + 6) % 12) - 6
 
     @no_errors
     def parse_notes(self):
-        time = 0
+        total_time = 0
+        total_ticks = 0
         tpb = self.mido_obj.ticks_per_beat
 
         notes_on = {}
@@ -196,25 +202,31 @@ class Melody:
         ftpm = self.final_ticks_per_beat * self.time_signature[0]
 
         note_info = []
+        first_note = False
 
         for m in self.mido_obj:
             ticks = int(np.round(mido.second2tick(m.time, tpb, self.tempo)))
-            time += ticks
+            total_ticks += ticks
+            total_time += m.time
 
             if m.type != 'note_on':
                 continue
 
             if m.velocity > 0:
+                if not first_note:
+                    first_note = True
+                    total_ticks = 0
+
                 if m.note not in notes_on:
                     notes_on[m.note] = []
 
-                notes_on[m.note].append(time)
+                notes_on[m.note].append(total_ticks)
             else:
                 if m.note in notes_on and len(notes_on[m.note]) > 0:
                     raw_note_ticks = notes_on[m.note][0] / tpm
                     quant_note_ticks = int(round(ftpm * raw_note_ticks))
 
-                    raw_note_duration = (time - notes_on[m.note][0]) / tpm
+                    raw_note_duration = (total_ticks - notes_on[m.note][0]) / tpm
                     quant_note_duration = int(round(ftpm * raw_note_duration))
 
                     note_offset = quant_note_ticks % ftpm
@@ -229,6 +241,7 @@ class Melody:
                         note_info.append({
                             'pitch': pitch,
                             'pitch_class': replace_enharmonic(notes.int_to_note(pitch % 12)),
+                            'time': total_time,
                             'raw_ticks': raw_note_ticks,
                             'quant_ticks': quant_note_ticks,
                             'raw_duration': raw_note_duration,
@@ -243,6 +256,15 @@ class Melody:
         self.max_measure = int(np.ceil((self.note_info.measure + (
                 (self.note_info.offset + self.note_info.quant_duration) / self.final_ticks_per_beat /
                 self.time_signature[0])).max())) - 1
+
+    def transpose(self, transpose_semitones=None):
+        if self.note_info is None:
+            raise Exception('Note info not set yet')
+
+        if transpose_semitones is not None:
+            self.transpose_semitones = transpose_semitones
+
+        self.note_info['pitch'] = self.note_info['pitch'] + self.transpose_semitones
 
     def calculate_alignment_score(self, offset):
         song_scores = []
@@ -410,45 +432,39 @@ class Melody:
         bpm = self.time_signature[0]
         ftpm = self.final_ticks_per_beat * bpm
         starting_measure = self.starting_measure
-
-        linear_chord_progression = []
-
-        for section in self.song_structure['sections']:
-            linear_chord_progression += self.song_structure['progression'][section]
-
-        n_chord_prog_measures = int(len(linear_chord_progression) / bpm)
-
         n_measures = self.note_info['measure'].max() + 1
 
         repetition = 1
         lower_bound = starting_measure
-        upper_bound = starting_measure + n_chord_prog_measures
+        upper_bound = starting_measure + self.n_chord_prog_measures
 
-        while upper_bound <= n_measures:
+        while lower_bound <= n_measures:
             valid_notes = self.note_info[
                 (self.note_info['measure'] >= lower_bound) &
                 (self.note_info['measure'] < upper_bound)
             ]
 
-            if len(valid_notes) >= 20:
+            print(f"Repetition {repetition}, {len(valid_notes)} notes")
+
+            if len(valid_notes) >= 40:
                 notes_df = pd.DataFrame(valid_notes)
 
                 notes_df['measure'] = (
                         notes_df['measure'] -
                         starting_measure -
-                        (n_chord_prog_measures * (repetition - 1))
+                        (self.n_chord_prog_measures * (repetition - 1))
                 )
 
                 notes_df['raw_ticks'] = (
                         notes_df['raw_ticks'] -
                         starting_measure -
-                        n_chord_prog_measures * (repetition - 1)
+                        self.n_chord_prog_measures * (repetition - 1)
                 )
 
                 notes_df['quant_ticks'] = (
                         notes_df['quant_ticks'] -
                         ftpm * starting_measure -
-                        ftpm * n_chord_prog_measures * (repetition - 1)
+                        ftpm * self.n_chord_prog_measures * (repetition - 1)
                 )
 
                 if quantized:
@@ -458,17 +474,16 @@ class Melody:
                     notes_df['ticks'] = notes_df['raw_duration']
                     notes_df['duration'] = notes_df['quant_duration']
 
+                flat_chord_progression = self.flat_chord_progression
+
                 def get_current_chord(row):
                     offset = row['measure'] + (row['offset'] / ftpm)
-                    return linear_chord_progression[int(np.floor(offset * bpm))]
+                    chord_idx = int(np.floor(offset * bpm))
+
+                    return flat_chord_progression[chord_idx]
 
                 current_chords = notes_df.apply(lambda x: get_current_chord(x), axis=1)
-                chord_info = current_chords.apply(self.split_chord)
-
                 notes_df['chord_name'] = current_chords
-                notes_df['chord_root'] = chord_info.apply(lambda x: x[0])
-                notes_df['chord_bass'] = chord_info.apply(lambda x: x[1])
-                notes_df['chord_notes'] = chord_info.apply(lambda x: x[2])
 
                 split_melody_data_folder = f'{self.split_melody_data_folder}/{self.source}'
 
@@ -495,8 +510,8 @@ class Melody:
                 notes_and_chord_to_midi(notes_df, self.song_structure, quantized, split_melody_filepath)
 
             repetition += 1
-            lower_bound += n_chord_prog_measures
-            upper_bound += n_chord_prog_measures
+            lower_bound += self.n_chord_prog_measures
+            upper_bound += self.n_chord_prog_measures
 
             if self.original:
                 return True
@@ -506,20 +521,15 @@ class Melody:
     def chord_progression_comparison(self):
         bpm = self.time_signature[0]
 
-        n_chord_prog_measures = int(np.sum([
-            len(self.song_structure['progression'][section])
-            for section in self.song_structure['sections']]
-        ) / bpm)
-
         n_measures = int(self.note_info['measure'].max() + 1)
 
-        outro_init = (self.max_measure - self.min_measure + 1) % n_chord_prog_measures
-        outro_auto = (self.max_measure - self.starting_measure + 1) % n_chord_prog_measures
+        outro_init = (self.max_measure - self.min_measure + 1) % self.n_chord_prog_measures
+        outro_auto = (self.max_measure - self.starting_measure + 1) % self.n_chord_prog_measures
 
         return {
-            'cp_measures': n_chord_prog_measures,
+            'cp_measures': self.n_chord_prog_measures,
             'n_measures': n_measures,
-            'repetitions': n_measures // n_chord_prog_measures,
+            'repetitions': n_measures // self.n_chord_prog_measures,
             'min_measure': self.min_measure,
             'max_measure': self.max_measure,
             'outro_init': outro_init,

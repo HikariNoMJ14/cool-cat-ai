@@ -4,7 +4,7 @@ from glob import glob
 
 import numpy as np
 
-from src.utils import get_chord_progressions
+from src.utils import get_chord_progressions, flatten_chord_progression
 # from src.dataset.example import Example
 
 
@@ -69,15 +69,6 @@ class Dataset(ABC):
     @staticmethod
     def multiple_pitches_to_string(pitches):
         return "-".join(str(x) for x in pitches)
-
-    @staticmethod
-    def flatten_chord_progression(chord_progression):
-        linear_chord_progression = []
-
-        for section in chord_progression['sections']:
-            linear_chord_progression += chord_progression['progression'][section]
-
-        return linear_chord_progression
 
     @staticmethod
     def is_valid_min_pitch(pitches):

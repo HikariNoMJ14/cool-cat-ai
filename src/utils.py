@@ -159,6 +159,15 @@ def get_chord_progressions(src_folder='../..'):
     return chord_progressions
 
 
+def flatten_chord_progression(chord_progression):
+    linear_chord_progression = []
+
+    for section in chord_progression['sections']:
+        linear_chord_progression += chord_progression['progression'][section]
+
+    return linear_chord_progression
+
+
 def midi_to_notes(midi_file: str) -> pd.DataFrame:
     p = pm.PrettyMIDI(midi_file)
     instrument = p.instruments[0]
