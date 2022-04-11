@@ -5,14 +5,10 @@ from glob import glob
 from datetime import datetime
 
 import music21.key
-import numpy as np
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 
-from melody import Melody
+from melody.melody import Melody
 from utils import get_chord_progressions, calculate_melody_results
-from objective_metrics import calculate_HC
 
 if __name__ == "__main__":
     version = '1.2'

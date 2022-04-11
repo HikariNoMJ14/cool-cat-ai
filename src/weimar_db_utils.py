@@ -5,10 +5,9 @@ def get_offset(row):
     beat = int(row['beat'])
     tat = int(row['tatum'])
     sub = int(row['subtatum'])
-    per = int(row['period'])
     div = int(row['division'])
 
-    tpb = 48 / per
+    tpb = 12
 
     if sub != 0:
         print('Sub!!!!')
@@ -22,23 +21,23 @@ def create_note_info(info):
     ni = info[~info['pitch'].isnull()].reset_index(drop=True)
 
     time_signature = ni['period'].unique()[0]
-    tpb = 48 / time_signature
+    tpb = 12
 
     ni['pitch'] = ni['pitch'].apply(int)
     ni['measure'] = ni['bar']
     ni['offset'] = ni.apply(get_offset, axis=1)
 
-    if ni['offset'].max() >= 48:
+    if ni['offset'].max() >= 12 * time_signature:
         print('Offset bigger than 47')
 
-    ni['quant_ticks'] = ni['offset'] + ni['bar'] * 48
+    ni['quant_ticks'] = ni['offset'] + ni['bar'] * tpb * time_signature
     ni['duration'] = (ni['duration'] * (ni['avgtempo'] / 60) * tpb).apply(round)
 
     ni['raw_ticks'] = ni['quant_ticks']
     ni['raw_duration'] = ni['duration']
     ni['quant_duration'] = ni['duration']
 
-    ni = ni[ni['duration']>0]
+    ni = ni[ni['duration'] > 0]
 
     return ni[['pitch', 'raw_ticks', 'quant_ticks', 'raw_duration', 'quant_duration', 'offset', 'measure']]
 
@@ -63,13 +62,11 @@ def flatten_wdb_chord_progression(performer, song_name, base_folder='../..'):
 
             cp = part.split(':')[1].strip().replace('||', '').split('|')
 
-            #         print(cp)
             chord_progression = []
 
             for m in cp:
                 m = m.replace('NC', ' ')
                 cs = re.split(r'([ ,A-Z][a-z,#,0-9,-]*)', m)
-                #             print(cs)
 
                 for c in cs:
                     if c != '' and c != " ":
@@ -110,13 +107,13 @@ def flatten_wdb_chord_progression(performer, song_name, base_folder='../..'):
         for section in song_structure['sections']:
             linear_chord_progression += song_structure['progression'][section.replace('*', '')]
 
-        print(song_structure['key'])
-        print('------')
+        # print(song_structure['key'])
+        # print('------')
         print(song_structure['sections'])
-        print('------')
-        for k, p in song_structure['progression'].items():
-            print(k)
-            print(p)
-            print('------')
+        # print('------')
+        # for k, p in song_structure['progression'].items():
+        #     print(k)
+        #     print(p)
+        #     print('------')
 
         return linear_chord_progression

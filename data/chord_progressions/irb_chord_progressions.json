@@ -30574,8 +30574,7 @@
       "A",
       "A",
       "B",
-      "A2",
-      "Coda"
+      "A2"
     ],
     "progression": {
       "A": [
@@ -60628,8 +60627,7 @@
       "A",
       "N2",
       "B",
-      "A2",
-      "Coda"
+      "A2"
     ],
     "progression": {
       "A": [
@@ -60713,40 +60711,41 @@
         "Bb6",
         "Gmin7",
         "Gmin7",
+
         "Cmin7",
         "Cmin7",
         "F7",
         "F7",
+
         "Dmin7",
         "Dmin7",
         "Gmin7",
         "Gmin7",
+
         "Cmin7",
         "Cmin7",
         "F7",
         "F7",
+
         "Bb7",
         "Bb7",
         "Bb7/D",
         "Bb7/D",
+
         "Eb7",
         "Eb7",
         "Edim7",
-        "Edim7"
-      ],
-      "ToCod": [
+        "Edim7",
+
         "Bb6/F",
         "Bb6/F",
         "F7",
         "F7",
+
         "Bb6",
         "Bb6",
         "Bb6",
-        "Bb6",
-        "F7",
-        "F7",
-        "F7",
-        "F7"
+        "Bb6"
       ],
       "Coda": [
         "Bb6/F",
@@ -104683,7 +104682,6 @@
       "A",
       "B",
       "A2",
-      "ToCod",
       "A",
       "A",
       "B",
@@ -104792,7 +104790,6 @@
         "Dmin",
         "Dmin"
       ],
-      "ToCod": [],
       "Coda": [
         "Em7b5",
         "Em7b5",

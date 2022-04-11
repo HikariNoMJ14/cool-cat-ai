@@ -605,7 +605,7 @@ def calculate_HC(melody):
         if cur_chord_affinity[pitch] == 'ChT':
             score = 1.0
         elif cur_chord_affinity[pitch] == 'CoT':
-            score = .5
+            score = .66
         elif cur_chord_affinity[pitch] == 'NaN':
             score = .0
 
@@ -618,7 +618,7 @@ def calculate_HC(melody):
 
                 if durations[idx] <= 12 and \
                         (next_chord_affinity[next_pitch] == 'ChT' or next_chord_affinity[previous_pitch] == 'ChT'):
-                    score = 0.25
+                    score = 0.33
 
         harmonic_consistency.append(score)
 

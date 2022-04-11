@@ -48,6 +48,14 @@ def find_chords(filename):
     return output_filename
 
 
+def filepath_to_song_name(filepath):
+    song_name = os.path.basename(filepath).replace('.mid', '').replace('.csv', '')
+    song_name = "".join(song_name.split(' - ')[-1])
+    song_name = re.sub('-[0-9,o]*-', '', song_name)
+    song_name = re.sub('\(.*\)', '', song_name).strip()
+
+    return song_name
+
 def filename_to_songname(filename):
     songname = filename.replace('.mid', '')
     songname = re.sub(r' \([0-9]\)', '', songname)
@@ -165,7 +173,22 @@ def flatten_chord_progression(chord_progression):
     for section in chord_progression['sections']:
         linear_chord_progression += chord_progression['progression'][section]
 
+    # print(chord_progression['sections'])
+
     return linear_chord_progression
+
+
+def is_weakly_polyphonic(melody):
+    melody['end_ticks'] = melody['ticks'] + melody['duration']
+
+    return melody[
+               (melody['end_ticks'].shift(1) > melody['ticks']) |
+               (melody['end_ticks'] > melody['ticks'].shift(-1))
+               ][['ticks', 'end_ticks']].shape[0] > 0
+
+
+def is_strongly_polyphonic(melody):
+    return melody['ticks'].shape[0] > melody['ticks'].nunique()
 
 
 def midi_to_notes(midi_file: str) -> pd.DataFrame:
@@ -273,7 +296,7 @@ def notes_and_chord_to_midi(
                     velocity=64,
                     pitch=int(chord_notes[0]),
                     start=start,
-                    end=start + 0.5,
+                    end=start + 0.25,
                 )
                 chords.notes.append(note)
 
@@ -287,7 +310,7 @@ def notes_and_chord_to_midi(
                         velocity=64,
                         pitch=int(chord_note),
                         start=start,
-                        end=start + 0.5,
+                        end=start + 0.25,
                     )
                     chords.notes.append(note)
 
@@ -333,7 +356,6 @@ def calculate_melody_results(melody):
         all_results[i] = results
 
     return all_results
-
 
 # if __name__ == "__main__":
 # for i in range(128):
