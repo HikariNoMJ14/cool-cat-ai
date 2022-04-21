@@ -12,7 +12,7 @@ import mingus.core.scales as scales
 import mingus.core
 import mingus.core.notes as notes
 
-from ezchord import Chord
+from src.ezchord import Chord
 
 PITCH_CLS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
 N_PITCH_CLS = 12  # {C, C#, ..., Bb, B}

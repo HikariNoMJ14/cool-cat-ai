@@ -5,9 +5,9 @@ import numpy as np
 import pretty_midi as pm
 import torch
 
-from melody import Melody
-from ezchord import Chord
-from utils import is_weakly_polyphonic, is_strongly_polyphonic, flatten_chord_progression
+from src.melody import Melody
+from src.ezchord import Chord
+from src.utils import is_weakly_polyphonic, is_strongly_polyphonic, flatten_chord_progression
 
 
 # TODO Class inheritance not great - rethink
@@ -194,8 +194,8 @@ class TimeStepMelody(Melody):
 
         while True:
             if len(chord_pitches) == chord_notes_count:
-                if chord_pitches != sorted(chord_pitches):
-                    print(f'Notes {chord_pitches} not sorted')
+                # if chord_pitches != sorted(chord_pitches):
+                #     print(f'Notes {chord_pitches} not sorted')
 
                 return np.array(sorted(chord_pitches))
 
@@ -251,9 +251,6 @@ class TimeStepMelody(Melody):
                     .apply(lambda x: x.getMIDI()) \
                     .apply(chord_encoding, chord_notes_count=7)
             )).long().clone().transpose(0, 1)
-
-        # print(chord_pitches)
-        # print(chord_pitches.size())
 
         # TODO check which symbols to use for padding
 

@@ -10,15 +10,15 @@ from mido import MidiFile, MidiTrack
 from mingus.core import chords
 import mingus.core.notes as notes
 
-from ezchord import Chord
+from src.ezchord import Chord
 
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from utils import is_weakly_polyphonic, is_strongly_polyphonic, \
-    notes_and_chord_to_midi, flatten_chord_progression, filepath_to_song_name
-from objective_metrics import replace_enharmonic
+from src.utils import is_weakly_polyphonic, is_strongly_polyphonic, \
+    notes_to_midi, notes_and_chord_to_midi, flatten_chord_progression, filepath_to_song_name
+from src.objective_metrics import replace_enharmonic
 
 
 def no_errors(func):
@@ -105,8 +105,8 @@ class Melody:
         overlap = (new_melody['end_ticks'] - new_melody['ticks'].shift(-1)).clip(0, None)
 
         # skip last row as 'shift' messes it up
-        new_melody['duration'].iloc[:-1] -= overlap.iloc[:-1]
-        new_melody['end_ticks'].iloc[:-1] -= overlap.iloc[:-1]
+        new_melody.iloc[:-1, new_melody.columns.get_loc('duration')] -= overlap.iloc[:-1]
+        new_melody.iloc[:-1, new_melody.columns.get_loc('end_ticks')] -= overlap.iloc[:-1]
 
         if is_weakly_polyphonic(new_melody):
             raise Exception('Error!!! Weak polyphony not removed correctly')
@@ -459,7 +459,34 @@ class Melody:
         else:
             return 0
 
-    def split_melody(self, quantized):
+    def save_split_melody(self, repetition, quantized, chords=True):
+        split_melody_df = self.split_note_info[repetition-1]
+
+        split_melody_data_folder = f'{self.split_melody_data_folder}/{self.source}'
+
+        if not os.path.exists(split_melody_data_folder):
+            os.makedirs(split_melody_data_folder)
+
+        split_melody_data_filepath = f'{split_melody_data_folder}/{self.filename.replace(".mid", "")} ' \
+                                     f'{"-o-" if self.original else "-" + str(repetition) + "-"}.csv'
+
+        split_melody_df.to_csv(split_melody_data_filepath)
+
+        split_melody_folder = f'{self.split_melody_folder}/{self.source}'
+
+        if not os.path.exists(split_melody_folder):
+            os.makedirs(split_melody_folder)
+
+        split_melody_filepath = os.path.join(
+            split_melody_folder,
+            f'{self.filename.replace(".mid", "")} {"-o-" if self.original else f"-{repetition}-"}.mid'
+        )
+        if chords:
+            notes_and_chord_to_midi(split_melody_df, self.song_structure, quantized, split_melody_filepath)
+        else:
+            notes_to_midi(split_melody_df, split_melody_filepath)
+
+    def split_melody(self, quantized, save=True):
         bpm = self.time_signature[0]
         ftpm = self.FINAL_TICKS_PER_BEAT * bpm
         starting_measure = self.starting_measure
@@ -475,7 +502,7 @@ class Melody:
                 (self.note_info['measure'] < upper_bound)
             ]
 
-            print(f"Repetition {repetition}, {len(valid_notes)} notes")
+            # print(f"Repetition {repetition}, {len(valid_notes)} notes")
 
             if self.original or len(valid_notes) >= 40:
                 notes_df = pd.DataFrame(valid_notes)
@@ -516,29 +543,10 @@ class Melody:
                 current_chords = notes_df.apply(lambda x: get_current_chord(x), axis=1)
                 notes_df['chord_name'] = current_chords
 
-                split_melody_data_folder = f'{self.split_melody_data_folder}/{self.source}'
-
-                if not os.path.exists(split_melody_data_folder):
-                    os.makedirs(split_melody_data_folder)
-
-                split_melody_data_filepath = f'{split_melody_data_folder}/{self.filename.replace(".mid", "")} ' \
-                                             f'{"-o-" if self.original else "-" + str(repetition) + "-"}.csv'
-
-                notes_df.to_csv(split_melody_data_filepath)
-
                 self.split_note_info.append(notes_df)
 
-                split_melody_folder = f'{self.split_melody_folder}/{self.source}'
-
-                if not os.path.exists(split_melody_folder):
-                    os.makedirs(split_melody_folder)
-
-                split_melody_filepath = os.path.join(
-                    split_melody_folder,
-                    f'{self.filename.replace(".mid", "")} {"-o-" if self.original else f"-{repetition}-"}.mid'
-                )
-
-                notes_and_chord_to_midi(notes_df, self.song_structure, quantized, split_melody_filepath)
+                if save:
+                    self.save_split_melody(repetition, quantized)
 
             repetition += 1
             lower_bound += self.n_chord_prog_measures

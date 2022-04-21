@@ -6,12 +6,12 @@ import json
 import pandas as pd
 import numpy as np
 
-from ezchord import Chord
+from src.ezchord import Chord
 
 import pretty_midi as pm
 import mingus.core.notes as notes
 
-from objective_metrics import calculate_HC, calculate_silence_ratio
+from src.objective_metrics import calculate_HC, calculate_silence_ratio
 
 melody_names = ['melody', 'melodia', 'melodía', 'lead']
 non_melody_names = ['bass', 'bajo', 'basso', 'baixo', 'drum', 'percussion', 'batería', 'bateria', 'chord', 'rhythm',
