@@ -10,12 +10,11 @@ from mido import MidiFile, MidiTrack
 from mingus.core import chords
 import mingus.core.notes as notes
 
-from src.ezchord import Chord
-
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
+from src.ezchord import Chord
 from src.utils import is_weakly_polyphonic, is_strongly_polyphonic, \
     notes_to_midi, notes_and_chord_to_midi, flatten_chord_progression, filepath_to_song_name
 from src.objective_metrics import replace_enharmonic

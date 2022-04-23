@@ -1,3 +1,4 @@
+# TODO move to own files
 import os
 import re
 import copy
@@ -12,6 +13,7 @@ import pretty_midi as pm
 import mingus.core.notes as notes
 
 from src.objective_metrics import calculate_HC, calculate_silence_ratio
+from src.utils.metrics import Metric
 
 melody_names = ['melody', 'melodia', 'melodía', 'lead']
 non_melody_names = ['bass', 'bajo', 'basso', 'baixo', 'drum', 'percussion', 'batería', 'bateria', 'chord', 'rhythm',

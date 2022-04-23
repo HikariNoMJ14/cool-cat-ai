@@ -12,6 +12,7 @@ from src.utils import get_chord_progressions, filepath_to_song_name
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
 
+
 class Dataset:
     VERSION = '1.2'
 
@@ -33,7 +34,7 @@ class Dataset:
     }
 
     def __init__(self,
-                 melody_encoding_type,
+                 encoding_type,
                  polyphonic,
                  sequence_size,
                  chord_encoding_type,
@@ -45,7 +46,7 @@ class Dataset:
 
         assert transpose_mode == 'all' or transpose_mode == 'c' or transpose_mode == 'none'
 
-        self.melody_encoding_type = melody_encoding_type
+        self.encoding_type = encoding_type
         self.polyphonic = polyphonic
         self.sequence_size = sequence_size
         self.transpose_mode = transpose_mode
@@ -66,7 +67,7 @@ class Dataset:
             src_path,
             'data',
             'tensor_dataset',
-            self.melody_encoding_type,
+            self.encoding_type,
             'poly' if self.polyphonic else 'mono'
         )
         self.name = f'sequence_{self.sequence_size}_' \
@@ -120,23 +121,33 @@ class Dataset:
 
             c += 1
 
-    def data_loaders(self, batch_size, split=(0.85, 0.10, 0.05)):
+    def data_loaders(self, batch_size, split=(0.85, 0.10, 0.05), seed=None):
 
         assert sum(split) == 1
 
-        # TODO Shuffle dataset before split
         dataset = self.tensor_dataset
         num_examples = len(dataset)
-        a, b, _ = split
-        train_dataset = TensorDataset(*dataset[:int(a * num_examples)])
-        val_dataset = TensorDataset(*dataset[int(a * num_examples):int((a + b) * num_examples)])
-        eval_dataset = TensorDataset(*dataset[int((a + b) * num_examples):])
+        train_dataset, \
+        val_dataset, \
+        eval_dataset = torch.utils.data.random_split(
+            dataset, [
+                int(round(num_examples * split[0])),
+                int(round(num_examples * split[1])),
+                int(round(num_examples * split[2]))
+            ],
+            generator=torch.Generator().manual_seed(seed)
+        )
+
+        # a, b, _ = split
+        # train_dataset = TensorDataset(*dataset[:int(a * num_examples)])
+        # val_dataset = TensorDataset(*dataset[int(a * num_examples):int((a + b) * num_examples)])
+        # eval_dataset = TensorDataset(*dataset[int((a + b) * num_examples):])
 
         train_dataloader = DataLoader(
             train_dataset,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=0,  # TODO change to 4
+            num_workers=4,  # TODO change to 4
             pin_memory=True,
             drop_last=True,
         )
@@ -145,7 +156,7 @@ class Dataset:
             val_dataset,
             batch_size=batch_size,
             shuffle=False,
-            num_workers=0,
+            num_workers=4,
             pin_memory=False,
             drop_last=True,
         )
@@ -154,7 +165,7 @@ class Dataset:
             eval_dataset,
             batch_size=batch_size,
             shuffle=False,
-            num_workers=0,
+            num_workers=4,
             pin_memory=False,
             drop_last=True,
         )
@@ -219,8 +230,8 @@ class Dataset:
 
 if __name__ == "__main__":
     print(torch.cuda.is_available())
-    d = Dataset(sequence_size=24 * 4,
-                melody_encoding_type='timestep',
+    d = Dataset(sequence_size=48 * 2,
+                encoding_type='timestep',
                 polyphonic=False,
                 chord_encoding_type='extended',
                 chord_extension_count=7,

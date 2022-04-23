@@ -18,7 +18,6 @@ class TimeStepMelody(Melody):
     BASE_FOLDER = '../..'
 
     OCTAVE_SEMITONES = 12
-
     START_SYMBOL = 129
     END_SYMBOL = 130
 
@@ -175,9 +174,9 @@ class TimeStepMelody(Melody):
 
             rows.append({
                 'offset': offset,
-                'improvised_sustains': improvised_sustains,  # TODO add transpose
+                'improvised_sustains': improvised_sustains + transpose_interval,
                 'improvised_attacks': improvised_attacks,
-                'original_sustains': original_sustains,  # TODO add transpose
+                'original_sustains': original_sustains + transpose_interval,
                 'original_attacks': original_attacks,
                 'chord_name': chord_name
             })

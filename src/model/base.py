@@ -1,51 +1,20 @@
 import os
-import sys
 import logging
 import time
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
 import torch
-import torch.nn as nn
+from torch import nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 
 from src.dataset import Dataset
+from src.utils import Metric
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
-
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
-logFormatter = logging.Formatter('%(levelname)7s - %(message)s')
-
-consoleHandler = logging.StreamHandler(sys.stdout)
-consoleHandler.setFormatter(logFormatter)
-logger.addHandler(consoleHandler)
-
-
-# TODO move to own file
-
-class Metric:
-    def __init__(self, name='', fmt=':f'):
-        self.name = name
-        self.fmt = fmt
-        self.reset()
-
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
-
-    def __str__(self):
-        fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
-        return fmtstr.format(**self.__dict__)
 
 
 class MonoTimeStepModel(nn.Module):
@@ -76,54 +45,50 @@ class MonoTimeStepModel(nn.Module):
         ]
     }
 
-    LABEL = [
+    LABELS = [
         'improvised_pitch', 'improvised_attack'
     ]
 
-    # Input parameters
-    offset_size = 48
-    pitch_size = 131
-    attack_size = 1
-    metadata_size = 0
-
-    # embedding parameters
-    embedding_size = 256  # TODO add metadata embedding?
-
-    # LSTM parameters
-    num_layers = 3
-    lstm_hidden_size = 512
-
-    # NN parameters
-    nn_hidden_size = 200
-    nn_output_size = 32
-
-    # Training parameters
-    normalize = False
-    gradient_clipping = 0.25
     METRICS_LIST = [
         'pitch_loss', 'attack_loss',
         'pitch_top1', 'pitch_top3', 'pitch_top5',
         'attack_top1'
     ]
-    volatile = False
-    log_interval = 100
+    VOLATILE = False
+    LOG_INTERVAL = 500
 
-    def __init__(self, dataset: Dataset):  # TODO add dropout
+    def __init__(self, dataset: Dataset, logger, save_path=os.path.join(src_path, 'results'), **kwargs):
         super(MonoTimeStepModel, self).__init__()
 
-        logger.info('--- Init Model ---')
+        self.name = ''
+        self.save_dir = os.path.join(src_path, 'results')
 
         self.dataset = dataset
+        self.logger = logger
+        self.save_path = save_path
+
+        self.logger.info('--- Init Model ---')
+
+        # Set model parameters
+        self.offset_size = kwargs['offset_size']
+        self.pitch_size = kwargs['pitch_size']
+        self.attack_size = kwargs['attack_size']
+        self.metadata_size = kwargs['metadata_size']
+        self.embedding_size = kwargs['embedding_size']
+        self.embedding_dropout_rate = kwargs['embedding_dropout_rate']
+        self.lstm_num_layers = kwargs['lstm_num_layers']
+        self.lstm_hidden_size = kwargs['lstm_hidden_size']
+        self.lstm_dropout_rate = kwargs['lstm_dropout_rate']
+        self.nn_hidden_size = kwargs['nn_hidden_size']
+        self.nn_output_size = kwargs['nn_output_size']
+        self.nn_dropout_rate = kwargs['nn_dropout_rate']
+        self.normalize = kwargs['normalize']
+        self.gradient_clipping = kwargs['gradient_clipping']
+        self.pitch_loss_weight = kwargs['pitch_loss_weight']
+        self.attack_loss_weight = kwargs['attack_loss_weight']
+        self.apply_non_linearity = kwargs['apply_non_linearity']
+
         self.sequence_size = dataset.sequence_size
-
-        # TODO improve
-        self.save_dir = os.path.join(src_path, 'results/training_results')
-
-        self.pitch_loss_function = torch.nn.CrossEntropyLoss(
-            # ignore_index=129 # TODO ignore padding value? what about 130?
-        )
-        self.attack_loss_function = torch.nn.BCEWithLogitsLoss()
-
         self.chord_extension_count = dataset.chord_extension_count
         self.chord_encoding_type = dataset.chord_encoding_type
 
@@ -132,9 +97,20 @@ class MonoTimeStepModel(nn.Module):
             self.TENSOR_IDX_MAPPING['chord_pitches_start'] + self.chord_extension_count,
         ))
 
-        self.offset_encoder = nn.Embedding(self.offset_size, self.embedding_size)
-        self.pitch_encoder = nn.Embedding(self.pitch_size, self.embedding_size,
-                                          scale_grad_by_freq=True)
+        self.pitch_loss_function = nn.CrossEntropyLoss(
+            # ignore_index=129 # TODO ignore padding value? what about 130?
+        )
+        self.attack_loss_function = nn.BCEWithLogitsLoss()
+
+        # TODO change to locked_drop?
+        self.offset_encoder = nn.Sequential(
+            nn.Embedding(self.offset_size, self.embedding_size),
+            nn.Dropout(self.embedding_dropout_rate)
+        )
+        self.pitch_encoder = nn.Sequential(
+            nn.Embedding(self.pitch_size, self.embedding_size, scale_grad_by_freq=True),
+            nn.Dropout(self.embedding_dropout_rate)
+        )
         # TODO add padding_idx for 128 (rest)? what about START_SYMBOL and END_SYMBOL?
 
         #  offset +
@@ -148,13 +124,13 @@ class MonoTimeStepModel(nn.Module):
             if self.chord_encoding_type != 'compressed' \
             else 12
 
-        logger.debug(f'Model past LSTM input size: {past_lstm_input_size}')
+        self.logger.debug(f'Model past LSTM input size: {past_lstm_input_size}')
 
         self.past_lstm = nn.LSTM(
             input_size=past_lstm_input_size,
             hidden_size=self.lstm_hidden_size,
-            num_layers=self.num_layers,
-            # dropout=None,
+            num_layers=self.lstm_num_layers,
+            dropout=self.lstm_dropout_rate,
             batch_first=True
         )
 
@@ -169,13 +145,14 @@ class MonoTimeStepModel(nn.Module):
             if self.chord_encoding_type != 'compressed' \
             else 12
 
-        logger.debug(f'Model present LSTM input size: {present_nn_input_size}')
+        self.logger.debug(f'Model present LSTM input size: {present_nn_input_size}')
 
         self.present_nn = nn.Sequential(
             nn.Linear(present_nn_input_size, self.nn_hidden_size),
             nn.ReLU(),
+            nn.Dropout(self.nn_dropout_rate),
             nn.Linear(self.nn_hidden_size, self.nn_output_size),
-            nn.ReLU()  # TODO apply non-linearity?
+            nn.ReLU()
         )
 
         #  offset +
@@ -187,13 +164,13 @@ class MonoTimeStepModel(nn.Module):
             if self.chord_encoding_type != 'compressed' \
             else 12
 
-        logger.debug(f'Model future LSTM input size: {future_lstm_input_size}')
+        self.logger.debug(f'Model future LSTM input size: {future_lstm_input_size}')
 
         self.future_lstm = nn.LSTM(
             input_size=future_lstm_input_size,
             hidden_size=self.lstm_hidden_size,
-            num_layers=self.num_layers,
-            # dropout=None,
+            num_layers=self.lstm_num_layers,
+            dropout=self.lstm_dropout_rate,
             batch_first=True
         )
 
@@ -203,30 +180,25 @@ class MonoTimeStepModel(nn.Module):
         self.merge_nn = nn.Sequential(
             nn.Linear(merge_nn_input_size, self.nn_hidden_size),
             nn.ReLU(),
-            nn.Linear(self.nn_hidden_size, merge_nn_output_size),
-            # nn.ReLU()         # TODO apply non-linearity?
+            nn.Dropout(self.nn_dropout_rate),
+            nn.Linear(self.nn_hidden_size, merge_nn_output_size)
         )
 
         self.pitch_decoder = nn.Sequential(
-            nn.Linear(self.embedding_size, self.pitch_size)
+            nn.Linear(self.embedding_size, self.pitch_size),
+            nn.Dropout(self.embedding_dropout_rate)
         )
 
         # Tie pitch encoder and decoder weights
-        self.pitch_decoder.weight = self.pitch_encoder.weight
+        self.pitch_decoder[0].weight = self.pitch_encoder[0].weight
 
     # From DeepBach
     def init_hidden(self, batch_size):
         hidden = (
-            torch.randn(self.num_layers, batch_size, self.lstm_hidden_size).cuda(),
-            torch.randn(self.num_layers, batch_size, self.lstm_hidden_size).cuda()
+            torch.randn(self.lstm_num_layers, batch_size, self.lstm_hidden_size).cuda(),
+            torch.randn(self.lstm_num_layers, batch_size, self.lstm_hidden_size).cuda()
         )
         return hidden
-
-    # From BebopNet
-    # def init_hidden(self, batch_size):
-    #     weight = next(self.parameters()).detach()
-    #     return (weight.new(self.num_layers, batch_size, self.hidden_size).zero_(),
-    #             weight.new(self.num_layers, batch_size, self.hidden_size).zero_())
 
     def encode_chord_pitches(self, chord_pitches):
         chord_pitches_flat = chord_pitches.view(-1)
@@ -247,9 +219,7 @@ class MonoTimeStepModel(nn.Module):
 
         return torch.squeeze(chord_tensor).contiguous().view(tensor.size(0), tensor.size(1), -1)
 
-    def forward(self, past, present, future):
-        self.cuda()
-
+    def prepare_past_lstm_input(self, past):
         # Extract features from past tensor
         past_offsets = self.extract_features(past, 'offset', 0)
         past_improvised_pitches = self.extract_features(past, 'improvised_pitch', 1)
@@ -266,19 +236,14 @@ class MonoTimeStepModel(nn.Module):
         past_improvised_attacks = past_improvised_attacks[:, :, None]
         past_original_attacks = past_original_attacks[:, :, None]
 
-        # TODO add dropout(s) ?
-
-        # Past LSTM
-        past_lstm_input = torch.cat([
+        return torch.cat([
             past_offset_embedding,
             past_improvised_pitch_embedding, past_improvised_attacks,
             past_original_pitch_embedding, past_original_attacks,
             past_chord_pitches_embedding
         ], 2)
-        past_lstm_hidden = self.init_hidden(batch_size=past.size(0))
-        past_lstm_output, past_lstm_hidden = self.past_lstm(past_lstm_input, past_lstm_hidden)
-        past_lstm_output = past_lstm_output[:, -1, :]
 
+    def prepare_present_nn_input(self, present):
         # Extract features from present tensor
         present_offsets = self.extract_features(present, 'offset', 0)
         present_original_pitches = self.extract_features(present, 'original_pitch', 1)
@@ -291,15 +256,13 @@ class MonoTimeStepModel(nn.Module):
         present_chord_pitches_embedding = self.encode_chord_pitches(present_chord_pitches)
         present_original_attacks = present_original_attacks[:, :, None]
 
-        # Present NN
-        present_nn_input = torch.cat([
+        return torch.cat([
             present_offset_embedding,
             present_original_pitch_embedding, present_original_attacks,
             present_chord_pitches_embedding
         ], 2)
-        present_nn_input = present_nn_input.view(present.size(0), -1)
-        present_nn_output = self.present_nn(present_nn_input)
 
+    def prepare_future_lstm_input(self, future):
         # Extract features from future tensor
         future_offsets = self.extract_features(future, 'offset', 0)
         future_original_pitches = self.extract_features(future, 'original_pitch', 1)
@@ -312,12 +275,30 @@ class MonoTimeStepModel(nn.Module):
         future_chord_pitches_embedding = self.encode_chord_pitches(future_chord_pitches)
         future_original_attacks = future_original_attacks[:, :, None]
 
-        # Future LSTM
-        future_lstm_input = torch.cat([
+        return torch.cat([
             future_offset_embedding,
             future_original_pitch_embedding, future_original_attacks,
             future_chord_pitches_embedding
         ], 2)
+
+    def forward(self, past, present, future):
+        self.cuda()
+
+        # TODO add dropout(s) ?
+
+        # Past LSTM
+        past_lstm_input = self.prepare_past_lstm_input(past)
+        past_lstm_hidden = self.init_hidden(batch_size=past.size(0))
+        past_lstm_output, past_lstm_hidden = self.past_lstm(past_lstm_input, past_lstm_hidden)
+        past_lstm_output = past_lstm_output[:, -1, :]
+
+        # Present NN
+        present_nn_input = self.prepare_present_nn_input(present)
+        present_nn_input = present_nn_input.view(present.size(0), -1)
+        present_nn_output = self.present_nn(present_nn_input)
+
+        # Future LSTM
+        future_lstm_input = self.prepare_future_lstm_input(future)
         future_lstm_hidden = self.init_hidden(batch_size=future.size(0))
         future_lstm_output, future_lstm_hidden = self.future_lstm(future_lstm_input, future_lstm_hidden)
         future_lstm_output = future_lstm_output[:, -1, :]
@@ -326,10 +307,11 @@ class MonoTimeStepModel(nn.Module):
         merge_nn_input = torch.cat([past_lstm_output, present_nn_output, future_lstm_output], 1)
         merge_nn_output = self.merge_nn(merge_nn_input)
 
-        output_improvised_pitch = self.pitch_decoder(merge_nn_output[:, :self.embedding_size])
-        output_improvised_attack = torch.sigmoid(merge_nn_output[:, -self.attack_size:].view(-1))
-
-        # logger.warning(output_improvised_attack)
+        if self.apply_non_linearity:
+            output_improvised_pitch = self.pitch_decoder(torch.sigmoid(merge_nn_output[:, :self.embedding_size]))
+        else:
+            output_improvised_pitch = self.pitch_decoder(merge_nn_output[:, :self.embedding_size])
+        output_improvised_attack = merge_nn_output[:, -self.attack_size:].view(-1)
 
         if self.normalize:
             output_improvised_pitch = F.normalize(output_improvised_pitch, p=2, dim=1)
@@ -341,89 +323,154 @@ class MonoTimeStepModel(nn.Module):
         self.encode_pitch.weight.data = F.normalize(self.encode_pitch.weight, p=2, dim=1)
         self.encode_duration.weight.data = F.normalize(self.encode_duration.weight, p=2, dim=1)
 
-    def train_and_eval(self, batch_size, num_epochs, optimizer, scheduler, seed):
-        model_name = f'{time.strftime("%y_%m_%d_%H%M%S")}_{self.dataset.name}_batchsize_{batch_size}_seed_{seed}'
-        save_path = os.path.join(self.save_dir)
+    def train_and_eval(self, batch_size, num_epochs, optimizer, scheduler, seed, callback):
+        self.name = f'{self.dataset.name}_batchsize_{batch_size}_seed_{seed}'
 
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
-
-        checkpoint_path = os.path.join(save_path, model_name + '.pt')
-        log_path = os.path.join(save_path, model_name + '.log')
+        checkpoint_path = os.path.join(self.save_path, self.name + '.pt')
+        log_path = os.path.join(self.save_path, 'log.log')
 
         fileHandler = logging.FileHandler(log_path)
-        fileHandler.setFormatter(logFormatter)
-        logger.addHandler(fileHandler)
+        fileHandler.setFormatter(self.logger.handlers[0].formatter)
+        self.logger.addHandler(fileHandler)
 
-        logger.info(f'--- Training ---')
+        self.logger.info(f'--- Training ---')
+
         num_params = 0
         for p in self.parameters():
             num_params += p.numel()
 
-        logger.info(f'Num Params: {num_params}')
-        logger.info(f'Batch Size: {batch_size}')
-        logger.info(f'Sequence Size: {self.sequence_size}')
-        logger.info(f'Seed: {seed}')
+        self.logger.info(f'Num Params: {num_params}')
+        self.logger.info(f'Batch Size: {batch_size}')
+        self.logger.info(f'Sequence Size: {self.sequence_size}')
+        self.logger.info(f'Seed: {seed}')
 
-        logging.info("Model checkpoint path to {}".format(checkpoint_path))
+        self.logger.info(f"Model checkpoint path to {checkpoint_path}")
 
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
         np.random.seed(seed)
 
-        best_val_error = None
+        total_start_time = time.time()
+        best_valid_accuracy = None
+        training_results = []
 
-        for epoch in range(1, num_epochs + 1):
-            logger.info(f'--- Epoch {epoch} ---')
+        try:
+            for epoch in range(1, num_epochs + 1):
+                epoch_start_time = time.time()
 
-            epoch_start_time = time.time()
+                train_dataloader, \
+                val_dataloader, \
+                test_dataloader = self.dataset.data_loaders(
+                    batch_size=batch_size,
+                    split=(.85, .15, 0),
+                    seed=seed
+                )
 
-            (train_dataloader,
-             val_dataloader,
-             test_dataloader) = self.dataset.data_loaders(
-                batch_size=batch_size,
-            )
+                if epoch == 1:
+                    self.logger.info(f'Number of training examples: {len(train_dataloader)}')
+                    self.logger.info(f'Number of training examples: {len(val_dataloader)}')
 
-            train_loss, train_metrics = self.loss_and_accuracy(
-                dataloader=train_dataloader,
-                optimizer=optimizer,
-                phase='train',
-                batch_size=batch_size
-            )
+                self.logger.info(f'--- Epoch {epoch} ---')
 
-            validation_loss, validation_metrics = self.loss_and_accuracy(
-                dataloader=val_dataloader,
-                optimizer=optimizer,
-                phase='test',
-                batch_size=batch_size
-            )
+                train_loss, train_metrics = self.loss_and_accuracy(
+                    dataloader=train_dataloader,
+                    optimizer=optimizer,
+                    phase='train',
+                    batch_size=batch_size
+                )
 
-            training_str = ' | '.join([f'valid_{k}: {v}' for k, v in validation_metrics.items()])
-            validation_str = ' | '.join([f'valid_{k}: {v}' for k, v in validation_metrics.items()])
-            logging.info(
-                f'| End of epoch {epoch:3d} '
-                f'| Time: {(time.time() - epoch_start_time):5.2f}s '
-                f'| Train loss {train_loss:5.2f} '
-                f'| Train ppl {np.exp(train_loss):8.2f} '
-                f'| Train metrics {training_str}'
-                f'| Val loss {validation_loss:5.2f} '
-                f'| Val ppl {np.exp(validation_loss):8.2f} '
-                f'| Val metrics {validation_str}'
-            )
+                valid_loss, valid_metrics = self.loss_and_accuracy(
+                    dataloader=val_dataloader,
+                    optimizer=optimizer,
+                    phase='test',
+                    batch_size=batch_size
+                )
 
-            # Save the model if the validation loss is the best we've seen so far.
-            avg_val_error = validation_metrics['pitch_top1']
-            if not best_val_error or avg_val_error < best_val_error:
-                with open(checkpoint_path.replace('.pt', '_best_val.pt'), 'wb') as f:
-                    # torch.save(model, f)
-                    best_val_error = avg_val_error
+                training_str = ' | '.join([f'train_{k}: {v:5.2f}' for k, v in train_metrics.items()])
+                validation_str = ' | '.join([f'valid_{k}: {v:5.2f}' for k, v in valid_metrics.items()])
+                self.logger.info(
+                    f'End of epoch {epoch:3d} '
+                    f'Time: {(time.time() - epoch_start_time):5.2f}s '
+                )
+                self.logger.info(
+                    f'Train loss {train_loss:5.2f} '
+                    f'Train ppl {np.exp(train_loss):8.2f} '
+                    f'| {training_str}'
+                )
+                self.logger.info(
+                    f'Valid loss {valid_loss:5.2f} '
+                    f'Valid ppl {np.exp(valid_loss):8.2f} '
+                    f'| {validation_str}'
+                )
 
-            if epoch % 50 == 0:
-                with open(checkpoint_path.replace('.pt', '_e{}.pt'.format(epoch)), 'wb') as f:
-                    # torch.save(model, f)
-                    best_val_error = avg_val_error
+                epoch_results = dict({
+                    'epoch': epoch,
+                    'train_loss': train_loss,
+                    'train_ppl': np.exp(train_loss),
+                    'valid_loss': valid_loss,
+                    'valid_ppl': np.exp(valid_loss)
+                })
+                for name, value in train_metrics.items():
+                    epoch_results['train_' + name] = value
+                for name, value in valid_metrics.items():
+                    epoch_results['valid_' + name] = value
+                training_results.append(epoch_results)
 
-            scheduler.step()
+                # Save the model if the validation loss is the best we've seen so far.
+                average_valid_accuracy = valid_metrics['pitch_top1']
+                if not best_valid_accuracy or average_valid_accuracy < best_valid_accuracy:
+                    with open(checkpoint_path.replace('.pt', '_best_val.pt'), 'wb') as f:
+                        torch.save(self, f)
+                        best_valid_accuracy = average_valid_accuracy
+
+                if epoch % 50 == 0:
+                    with open(checkpoint_path.replace('.pt', f'_e{epoch}.pt'), 'wb') as f:
+                        torch.save(self, f)
+                        best_valid_accuracy = average_valid_accuracy
+
+                scheduler.step()
+
+            self.logger.info('--- End of Training ---')
+            self.logger.info(f'Time: {(time.time() - total_start_time):5.2f}s')
+
+            training_results = pd.DataFrame.from_dict(training_results)
+
+            callback('FINISHED', training_results)
+
+            # Plot training results
+            for metric in ['loss', 'ppl', 'pitch_loss', 'attack_loss']:
+                fig, ax = plt.subplots(nrows=1, ncols=1)
+                for phase in ['train', 'valid']:
+                    ax.plot(training_results[f'{phase}_{metric}'], label=f'{phase}_{metric.replace("_", " ")}')
+                fig.legend(loc="upper right")
+                fig.savefig(os.path.join(self.save_path, f'{metric}.png'))
+                plt.close(fig)
+
+            with open(checkpoint_path, 'wb') as f:
+                torch.save(self, f)
+
+        except KeyboardInterrupt:
+            self.logger.info('--- Training stopped ---')
+            self.logger.info(f'Time: {(time.time() - total_start_time):5.2f}s')
+
+            checkpoint_path = os.path.join(self.save_path, self.name + '_early_stop.pt')
+
+            training_results = pd.DataFrame.from_dict(training_results)
+
+            callback('KILLED', training_results)
+
+            if len(training_results) > 0:
+                # Plot training results
+                for metric in ['loss', 'ppl', 'pitch_loss', 'attack_loss']:
+                    fig, ax = plt.subplots(nrows=1, ncols=1)
+                    for phase in ['train', 'valid']:
+                        ax.plot(training_results[f'{phase}_{metric}'], label=f'{phase}_{metric.replace("_", " ")}')
+                    fig.legend(loc="upper right")
+                    fig.savefig(os.path.join(self.save_path, f'{metric}.png'))
+                    plt.close(fig)
+
+                with open(checkpoint_path, 'wb') as f:
+                    torch.save(self, f)
 
     def loss_and_accuracy(self, dataloader, phase, optimizer, batch_size):
         if phase == 'train':
@@ -437,22 +484,20 @@ class MonoTimeStepModel(nn.Module):
         logging_metrics = {k: Metric() for k in self.METRICS_LIST}
         start_time = time.time()
 
-        num_batches = len(dataset.tensor_dataset) // batch_size
+        num_batches = len(self.dataset.tensor_dataset) // batch_size
 
         for i, batch in enumerate(dataloader):
-            batch = Variable(batch[0], volatile=self.volatile).long().cuda()
+            batch = Variable(batch[0], volatile=self.VOLATILE).long().cuda()
 
             past, present, future, label = self.prepare_examples(batch)
-
             output_pitch, output_attack = self(past, present, future)
-
             current_loss, current_metrics = self.loss_function(output_pitch, output_attack, label)
 
             if phase == 'train':
                 optimizer.zero_grad()
                 current_loss.backward()
 
-                grad_norm = torch.nn.utils.clip_grad_norm_(self.parameters(), self.gradient_clipping)
+                grad_norm = nn.utils.clip_grad_norm_(self.parameters(), self.gradient_clipping)
                 optimizer.step()
 
                 if self.normalize:
@@ -465,14 +510,14 @@ class MonoTimeStepModel(nn.Module):
                 logging_metrics[name].update(float(current_metrics[name]), self.sequence_size)
 
             if phase == 'train':
-                if i % self.log_interval == 0 and i > 0:
+                if i % self.LOG_INTERVAL == 0 and i > 0:
                     cur_loss = logging_loss.avg
                     elapsed = time.time() - start_time
                     metric_str = ' | '.join([f'{k}: {v.avg:5.2f}' for k, v in logging_metrics.items()])
 
-                    logger.info(
+                    self.logger.info(
                         f'| {int(100 * i / num_batches):3d}% '
-                        # f'| ms/batch {(elapsed * 1000 / self.log_interval):7.2f} '
+                        # f'| ms/batch {(elapsed * 1000 / self.LOG_INTERVAL):7.2f} '
                         f'| loss {cur_loss:5.2f} '
                         f'| ppl {np.exp(cur_loss):6.2f} '
                         f'| grad_norm {grad_norm:5.2f} '
@@ -530,7 +575,7 @@ class MonoTimeStepModel(nn.Module):
 
         # Remove everything but improvised pitch and attack to get label
         label_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
-                                for feature in self.LABEL]
+                                for feature in self.LABELS]
         label = self.mask_entry(
             batch[:, middle_tick:middle_tick + 1:, :],
             label_tensor_indices,
@@ -542,14 +587,14 @@ class MonoTimeStepModel(nn.Module):
 
     def mask_entry(self, tensor, masked_indices, dim):
         idx = [i for i in range(tensor.size(dim)) if i in masked_indices]
-        idx = Variable(torch.LongTensor(idx).cuda(), volatile=self.volatile)
+        idx = Variable(torch.LongTensor(idx).cuda(), volatile=self.VOLATILE)
         tensor = tensor.index_select(dim, idx)
 
         return tensor
 
     def reverse_tensor(self, tensor, dim):
         idx = [i for i in range(tensor.size(dim) - 1, -1, -1)]
-        idx = Variable(torch.LongTensor(idx).cuda(), volatile=self.volatile).cuda()
+        idx = Variable(torch.LongTensor(idx).cuda(), volatile=self.VOLATILE).cuda()
         tensor = tensor.index_select(dim, idx)
 
         return tensor
@@ -577,10 +622,8 @@ class MonoTimeStepModel(nn.Module):
             'pitch_top1': pitch_top1, 'pitch_top3': pitch_top3, 'pitch_top5': pitch_top5,
             'attack_top1': attack_top1
         }
-
-        pitch_loss_weigh = 1
-        attack_loss_weigh = 0
-        total_loss = pitch_loss_weigh * pitch_loss + attack_loss_weigh * attack_loss
+        
+        total_loss = self.pitch_loss_weight * pitch_loss + self.attack_loss_weight * attack_loss
 
         return total_loss, metrics
 
@@ -599,51 +642,3 @@ class MonoTimeStepModel(nn.Module):
             results.append(correct_k.mul_(100.0 / batch_size))
 
         return results
-
-
-if __name__ == "__main__":
-    os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
-
-    batch_size = 64
-    num_epochs = 10
-    seed = 1234567890
-
-    learning_rate = 0.5
-    weight_decay = 1e-6
-
-    # TODO create Dataset manager class
-    from src.dataset import Dataset
-
-    dataset = Dataset(
-        sequence_size=48 * 4,
-        melody_encoding_type='timestep',
-        polyphonic=False,
-        chord_encoding_type='extended',
-        chord_extension_count=7,
-        transpose_mode='none'
-    )
-    dataset.load()
-
-    model = MonoTimeStepModel(
-        dataset=dataset)
-
-    optimizer = torch.optim.SGD(
-        model.parameters(),
-        lr=learning_rate,
-        momentum=0.9,
-        weight_decay=weight_decay,
-        nesterov=True
-    )
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(
-        optimizer,
-        milestones=[300, 400, 450],
-        gamma=0.5
-    )
-
-    model.train_and_eval(
-        batch_size,
-        num_epochs,
-        optimizer,
-        scheduler,
-        seed
-    )
