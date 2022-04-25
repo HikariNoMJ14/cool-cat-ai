@@ -63,7 +63,6 @@ if __name__ == "__main__":
     gradient_clipping = float(model_config['gradient_clipping'])
     pitch_loss_weight = float(model_config['pitch_loss_weight'])
     attack_loss_weight = float(model_config['attack_loss_weight'])
-    apply_non_linearity = bool(model_config['apply_non_linearity'])
 
     training_config = config['training']
     batch_size = int(training_config['batch_size'])
@@ -108,7 +107,6 @@ if __name__ == "__main__":
     mlflow.log_param('gradient_clipping', gradient_clipping)
     mlflow.log_param('pitch_loss_weight', pitch_loss_weight)
     mlflow.log_param('attack_loss_weight', attack_loss_weight)
-    mlflow.log_param('apply_non_linearity', apply_non_linearity)
 
     mlflow.log_param('batch_size', batch_size)
     mlflow.log_param('num_epochs', num_epochs)
@@ -146,8 +144,7 @@ if __name__ == "__main__":
         normalize=normalize,
         gradient_clipping=gradient_clipping,
         pitch_loss_weight=pitch_loss_weight,
-        attack_loss_weight=attack_loss_weight,
-        apply_non_linearity=apply_non_linearity
+        attack_loss_weight=attack_loss_weight
     )
 
     optimizer = torch.optim.SGD(
@@ -165,7 +162,7 @@ if __name__ == "__main__":
 
     def callback(status, training_results):
         if len(training_results) > 0:
-            for metric_name, metric_value in training_results.iloc[-1].iterrow():
+            for metric_name, metric_value in training_results.iloc[-1].iteritems():
                 mlflow.log_metric(metric_name, metric_value)
         mlflow.end_run(status)
 

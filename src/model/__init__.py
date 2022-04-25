@@ -1,1 +1,1 @@
-from src.model.base import MonoTimeStepModel
+from src.model.model import MonoTimeStepModel

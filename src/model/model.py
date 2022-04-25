@@ -86,7 +86,6 @@ class MonoTimeStepModel(nn.Module):
         self.gradient_clipping = kwargs['gradient_clipping']
         self.pitch_loss_weight = kwargs['pitch_loss_weight']
         self.attack_loss_weight = kwargs['attack_loss_weight']
-        self.apply_non_linearity = kwargs['apply_non_linearity']
 
         self.sequence_size = dataset.sequence_size
         self.chord_extension_count = dataset.chord_extension_count
@@ -152,7 +151,8 @@ class MonoTimeStepModel(nn.Module):
             nn.ReLU(),
             nn.Dropout(self.nn_dropout_rate),
             nn.Linear(self.nn_hidden_size, self.nn_output_size),
-            nn.ReLU()
+            nn.ReLU(),
+            nn.Dropout(self.nn_dropout_rate)  # TODO check if performance degrades with many epochs
         )
 
         #  offset +
@@ -307,10 +307,7 @@ class MonoTimeStepModel(nn.Module):
         merge_nn_input = torch.cat([past_lstm_output, present_nn_output, future_lstm_output], 1)
         merge_nn_output = self.merge_nn(merge_nn_input)
 
-        if self.apply_non_linearity:
-            output_improvised_pitch = self.pitch_decoder(torch.sigmoid(merge_nn_output[:, :self.embedding_size]))
-        else:
-            output_improvised_pitch = self.pitch_decoder(merge_nn_output[:, :self.embedding_size])
+        output_improvised_pitch = self.pitch_decoder(torch.sigmoid(merge_nn_output[:, :self.embedding_size]))
         output_improvised_attack = merge_nn_output[:, -self.attack_size:].view(-1)
 
         if self.normalize:
@@ -328,6 +325,7 @@ class MonoTimeStepModel(nn.Module):
 
         checkpoint_path = os.path.join(self.save_path, self.name + '.pt')
         log_path = os.path.join(self.save_path, 'log.log')
+        results_path = os.path.join(self.save_path, 'results.csv')
 
         fileHandler = logging.FileHandler(log_path)
         fileHandler.setFormatter(self.logger.handlers[0].formatter)
@@ -434,6 +432,7 @@ class MonoTimeStepModel(nn.Module):
             self.logger.info(f'Time: {(time.time() - total_start_time):5.2f}s')
 
             training_results = pd.DataFrame.from_dict(training_results)
+            training_results.to_csv(results_path)
 
             callback('FINISHED', training_results)
 
@@ -456,6 +455,7 @@ class MonoTimeStepModel(nn.Module):
             checkpoint_path = os.path.join(self.save_path, self.name + '_early_stop.pt')
 
             training_results = pd.DataFrame.from_dict(training_results)
+            training_results.to_csv(results_path)
 
             callback('KILLED', training_results)
 
@@ -623,7 +623,8 @@ class MonoTimeStepModel(nn.Module):
             'attack_top1': attack_top1
         }
         
-        total_loss = self.pitch_loss_weight * pitch_loss + self.attack_loss_weight * attack_loss
+        total_loss = self.pitch_loss_weight * pitch_loss + \
+                     self.attack_loss_weight * attack_loss
 
         return total_loss, metrics
 
