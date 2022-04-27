@@ -57,7 +57,7 @@ class MonoTimeStepModel(nn.Module):
     VOLATILE = False
     LOG_INTERVAL = 500
 
-    def __init__(self, dataset: Dataset, logger, save_path=os.path.join(src_path, 'results'), **kwargs):
+    def __init__(self, dataset, logger, save_path=os.path.join(src_path, 'results'), **kwargs):
         super(MonoTimeStepModel, self).__init__()
 
         self.name = ''
@@ -184,13 +184,10 @@ class MonoTimeStepModel(nn.Module):
             nn.Linear(self.nn_hidden_size, merge_nn_output_size)
         )
 
-        self.pitch_decoder = nn.Sequential(
-            nn.Linear(self.embedding_size, self.pitch_size),
-            nn.Dropout(self.embedding_dropout_rate)
-        )
+        self.pitch_decoder = nn.Linear(self.embedding_size, self.pitch_size)
 
         # Tie pitch encoder and decoder weights
-        self.pitch_decoder[0].weight = self.pitch_encoder[0].weight
+        self.pitch_decoder.weight = self.pitch_encoder[0].weight
 
     # From DeepBach
     def init_hidden(self, batch_size):
@@ -284,8 +281,6 @@ class MonoTimeStepModel(nn.Module):
     def forward(self, past, present, future):
         self.cuda()
 
-        # TODO add dropout(s) ?
-
         # Past LSTM
         past_lstm_input = self.prepare_past_lstm_input(past)
         past_lstm_hidden = self.init_hidden(batch_size=past.size(0))
@@ -327,9 +322,9 @@ class MonoTimeStepModel(nn.Module):
         log_path = os.path.join(self.save_path, 'log.log')
         results_path = os.path.join(self.save_path, 'results.csv')
 
-        fileHandler = logging.FileHandler(log_path)
-        fileHandler.setFormatter(self.logger.handlers[0].formatter)
-        self.logger.addHandler(fileHandler)
+        file_handler = logging.FileHandler(log_path)
+        file_handler.setFormatter(self.logger.handlers[0].formatter)
+        self.logger.addHandler(file_handler)
 
         self.logger.info(f'--- Training ---')
 
@@ -365,8 +360,8 @@ class MonoTimeStepModel(nn.Module):
                 )
 
                 if epoch == 1:
-                    self.logger.info(f'Number of training examples: {len(train_dataloader)}')
-                    self.logger.info(f'Number of training examples: {len(val_dataloader)}')
+                    self.logger.info(f'Number of training   examples: {len(train_dataloader)}')
+                    self.logger.info(f'Number of validation examples: {len(val_dataloader)}')
 
                 self.logger.info(f'--- Epoch {epoch} ---')
 
@@ -487,7 +482,8 @@ class MonoTimeStepModel(nn.Module):
         num_batches = len(self.dataset.tensor_dataset) // batch_size
 
         for i, batch in enumerate(dataloader):
-            batch = Variable(batch[0], volatile=self.VOLATILE).long().cuda()
+            batch = Variable(batch[:, 0, :, :], volatile=self.VOLATILE).long().cuda()
+            # batch = Variable(batch[0], volatile=self.VOLATILE).long().cuda()
 
             past, present, future, label = self.prepare_examples(batch)
             output_pitch, output_attack = self(past, present, future)

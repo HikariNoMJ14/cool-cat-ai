@@ -8,7 +8,7 @@ dataset:
   chord_encoding_type: extended
   chord_extension_count: 7
   transpose_mode: none
-  sequence_size: 192
+  sequence_size: 96
 
 model:
   offset_size: 48
@@ -22,18 +22,19 @@ model:
   nn_hidden_size: 128
   nn_output_size: 32
 
-  embedding_dropout_rate: 0
-  nn_dropout_rate: 0
-  lstm_dropout_rate: 0
+  embedding_dropout_rate: 0.5
+  nn_dropout_rate: 0.5
+  lstm_dropout_rate: 0.5
 
   normalize: False
   gradient_clipping: 0.25
+
   pitch_loss_weight: 0.5
   attack_loss_weight: 0.5
-  apply_non_linearity: False
+
 training:
   batch_size: 64
-  num_epochs: 15
+  num_epochs: 35
   seed: 1234567890
   learning_rate: 0.5
   momentum: 0.9

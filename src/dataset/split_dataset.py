@@ -1,6 +1,5 @@
 import os
 from glob import glob
-import pickle
 from datetime import datetime
 import torch
 import numpy as np
@@ -13,7 +12,23 @@ dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
 
 
-class Dataset:
+class CustomTensorDataset(TensorDataset):
+    def __init__(self, root):
+        super(CustomTensorDataset, self).__init__()
+
+        self.root = root
+        self.files = os.listdir(root)
+
+    def __len__(self):
+        return len(self.files)
+
+    def __getitem__(self, idx):
+        sample = torch.load(os.path.join(self.root, self.files[idx]))  # load the features of this sample
+
+        return sample
+
+
+class SplitDataset:
     VERSION = '1.2'
 
     OCTAVE_SEMITONES = 12
@@ -40,7 +55,7 @@ class Dataset:
                  chord_encoding_type,
                  chord_extension_count,
                  transpose_mode):
-        super(Dataset, self).__init__()
+        super(SplitDataset, self).__init__()
 
         self.tensor_dataset = None
 
@@ -63,19 +78,24 @@ class Dataset:
             'csv',
         )
 
+        self.name = f'sequence_{self.sequence_size}_' \
+                    f'transpose_{self.transpose_mode}_' \
+                    f'chord_{self.chord_encoding_type}_{self.chord_extension_count}'
+
         self.out_folder = os.path.join(
             src_path,
             'data',
             'tensor_dataset',
             self.encoding_type,
-            'poly' if self.polyphonic else 'mono'
+            'poly' if self.polyphonic else 'mono',
+            self.name
         )
-        self.name = f'sequence_{self.sequence_size}_' \
-                    f'transpose_{self.transpose_mode}_' \
-                    f'chord_{self.chord_encoding_type}_{self.chord_extension_count}'
 
         self.improvised_filepaths = self.get_filepaths('improvised')
         self.original_filepaths = self.get_filepaths('original')
+
+    def __len__(self):
+        return len(self.tensor_dataset)
 
     def get_filepaths(self, mode):
         filepaths = []
@@ -138,16 +158,11 @@ class Dataset:
             generator=torch.Generator().manual_seed(seed)
         )
 
-        # a, b, _ = split
-        # train_dataset = TensorDataset(*dataset[:int(a * num_examples)])
-        # val_dataset = TensorDataset(*dataset[int(a * num_examples):int((a + b) * num_examples)])
-        # eval_dataset = TensorDataset(*dataset[int((a + b) * num_examples):])
-
         train_dataloader = DataLoader(
             train_dataset,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=4,  # TODO change to 4
+            num_workers=4,
             pin_memory=True,
             drop_last=True,
         )
@@ -172,33 +187,26 @@ class Dataset:
 
         return train_dataloader, val_dataloader, eval_dataloader
 
-    # TODO also save song info to cross-reference songs and tensors
-    def save(self):
-        out_filename = f'{datetime.now().strftime("%Y_%m_%d_%H%M%S")}_' + self.name + '.pickle'
-        if not os.path.exists(self.out_folder):
-            os.makedirs(self.out_folder)
-
-        out_filepath = os.path.join(self.out_folder, out_filename)
-
-        with open(out_filepath, 'wb+') as f:
-            pickle.dump(self.tensor_dataset, f)
-
     def load(self, datetime=None):
         if datetime is None:
             # Get latest model
-            candidate_filepaths = glob(os.path.join(self.out_folder, f'*{self.name}.pickle'))
-            load_filepath = sorted(candidate_filepaths)[-1]
+            candidate_folders = glob(os.path.join(self.out_folder, "*"))
+            if len(candidate_folders) == 0:
+                raise FileNotFoundError(f'No folders under {candidate_folders}')
+            load_folder = sorted(candidate_folders)[-1]
         else:
             # Get model at specific datetime
-            load_filepath = os.path.join(self.out_folder, f'{datetime}_{self.name}.pickle')
-            if not os.path.exists(load_filepath):
-                raise FileNotFoundError(f'File {load_filepath} doesn\'t exist')
+            load_folder = os.path.join(self.out_folder, f'{datetime}')
+            if not os.path.exists(load_folder):
+                raise FileNotFoundError(f'Folder {load_folder} doesn\'t exist')
 
-        with open(load_filepath, 'rb') as f:
-            self.tensor_dataset = pickle.load(f)
+        self.tensor_dataset = CustomTensorDataset(load_folder)
 
     def create(self):
-        dataset = []
+        out_filepath = os.path.join(self.out_folder, f'{datetime.now().strftime("%Y_%m_%d_%H%M%S")}')
+
+        if not os.path.exists(out_filepath):
+            os.makedirs(out_filepath)
 
         for improvised_filepath in self.improvised_filepaths:
             print(improvised_filepath)
@@ -210,19 +218,37 @@ class Dataset:
             else:
                 transpose_intervals = [0]
 
-            for interval in transpose_intervals:
+            ts_melody = TimeStepMelody(improvised_filepath, polyphonic=False)
+            ts_melody.set_song_structure(self.chord_progressions[ts_melody.song_name])
+
+            original_filepath = self.get_original_filepath(ts_melody.song_name)
+
+            ts_melody.encode(improvised_filepath, original_filepath)
+
+            for transpose_interval in transpose_intervals:
                 if len(transpose_intervals) > 1:
-                    print(f'Transpose Interval: {interval}')
+                    print(f'Transpose Interval: {transpose_interval}')
 
-                time_step_melody = TimeStepMelody(improvised_filepath, polyphonic=False)
-                time_step_melody.set_song_structure(self.chord_progressions[time_step_melody.song_name])
+                loop_start = -self.sequence_size
+                loop_end = ts_melody.encoded.shape[0]
 
-                original_filepath = self.get_original_filepath(time_step_melody.song_name)
+                for offset_start in np.arange(loop_start, loop_end):
+                    start_idx = offset_start
+                    end_idx = offset_start + self.sequence_size
 
-                time_step_melody.encode(improvised_filepath, original_filepath, transpose_interval=interval)
+                    padded_tensor = ts_melody.create_padded_tensor(
+                        start_idx,
+                        end_idx,
+                        transpose_interval
+                    )[None, :, :].int()
 
-                dataset += time_step_melody.create_padded_tensors(self.sequence_size)
+                    out_filename = os.path.join(
+                        out_filepath,
+                        f'{ts_melody.source}#'
+                        f'{ts_melody.filename.replace(".csv", "")}#'
+                        f'{transpose_interval}#'
+                        f'{offset_start}.pt'
+                    )
 
-        self.tensor_dataset = TensorDataset(torch.cat(dataset, 0))
-
-        self.save()
+                    with open(out_filename, 'wb+') as fp:
+                        torch.save(padded_tensor, fp)

@@ -1,5 +1,4 @@
 import os
-import re
 
 import music21
 from music21 import converter
@@ -18,6 +17,9 @@ from src.ezchord import Chord
 from src.utils import is_weakly_polyphonic, is_strongly_polyphonic, \
     notes_to_midi, notes_and_chord_to_midi, flatten_chord_progression, filepath_to_song_name
 from src.objective_metrics import replace_enharmonic
+
+dir_path = os.path.dirname(os.path.realpath(__file__))
+src_path = os.path.join(dir_path, '..', '..')
 
 
 def no_errors(func):
@@ -50,7 +52,7 @@ class Melody:
         ]
     }
 
-    def __init__(self, filepath, version, base_folder):
+    def __init__(self, filepath, version):
         self.mido_obj = None
         self.music21_obj = None
         self.key = None
@@ -83,10 +85,10 @@ class Melody:
         self.candidate_score = None
         self.transpose_semitones = 0
 
-        self.alignment_scores_folder = f'{base_folder}/data/alignment_scores/v{version}'
-        self.split_melody_data_folder = f'{base_folder}/data/split_melody_data/v{version}'
-        self.split_melody_folder = f'{base_folder}/data/split_melody/v{version}'
-        self.finalised_melody_folder = f'{base_folder}/data/finalised'
+        self.alignment_scores_folder = f'{src_path}/data/alignment_scores/v{version}'
+        self.split_melody_data_folder = f'{src_path}/data/split_melody_data/v{version}'
+        self.split_melody_folder = f'{src_path}/data/split_melody/v{version}'
+        self.finalised_melody_folder = f'{src_path}/data/finalised'
 
         self.folder = filepath.split('/')[-3]
         self.source = filepath.split('/')[-2]

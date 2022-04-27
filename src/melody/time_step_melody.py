@@ -4,10 +4,16 @@ import pandas as pd
 import numpy as np
 import pretty_midi as pm
 import torch
+import json
 
 from src.melody import Melody
 from src.ezchord import Chord
 from src.utils import is_weakly_polyphonic, is_strongly_polyphonic, flatten_chord_progression
+
+dir_path = os.path.dirname(os.path.realpath(__file__))
+src_path = os.path.join(dir_path, '..', '..')
+
+chord_mapping_filepath = os.path.join(src_path, 'data', 'tensor_dataset', 'chords', 'extended_7.json')
 
 
 # TODO Class inheritance not great - rethink
@@ -15,42 +21,42 @@ from src.utils import is_weakly_polyphonic, is_strongly_polyphonic, flatten_chor
 
 class TimeStepMelody(Melody):
     VERSION = '1.2'
-    BASE_FOLDER = '../..'
-
     OCTAVE_SEMITONES = 12
     START_SYMBOL = 129
     END_SYMBOL = 130
 
     def __init__(self, filepath, polyphonic):
-        super(TimeStepMelody, self).__init__(filepath, self.VERSION, self.BASE_FOLDER)
+        super(TimeStepMelody, self).__init__(filepath, self.VERSION)
 
         self.encoded = None
         self.polyphonic = polyphonic
         self.encoded_folder = os.path.join(
-            self.BASE_FOLDER,
+            src_path,
             'data',
             'encoded',
             'timestep',
             'poly' if self.polyphonic else 'mono',
         )
+        # TODO pass chord encoding type
+        with open(chord_mapping_filepath) as fp:
+            self.chord_mapping = json.load(fp)
 
     @staticmethod
     def multiple_pitches_to_string(pitches):
         return "-".join(str(x) for x in pitches)
 
-    def encode(self, improvised_filepath, original_filepath, transpose_interval=0):
+    def encode(self, improvised_filepath, original_filepath):
         if self.polyphonic:
-            encoded = self.encode_poly(improvised_filepath, original_filepath, transpose_interval)
+            encoded = self.encode_poly(improvised_filepath, original_filepath)
         else:
-            encoded = self.encode_mono(improvised_filepath, original_filepath, transpose_interval)
+            encoded = self.encode_mono(improvised_filepath, original_filepath)
 
         self.encoded = encoded
 
-        # Save non-transposed encoded file
-        if transpose_interval == 0:
-            self.encoded.to_csv(f'{self.encoded_folder}/{self.source}')
+        # Save encoded file
+        self.encoded.to_csv(f'{self.encoded_folder}/{self.source}')
 
-    def encode_mono(self, improvised_filepath, original_filepath, transpose_interval=0):
+    def encode_mono(self, improvised_filepath, original_filepath):
         improvised = pd.read_csv(improvised_filepath, index_col=0)
         improvised['end_ticks'] = improvised['ticks'] + improvised['duration']
         improvised.sort_values('ticks', inplace=True)
@@ -125,9 +131,9 @@ class TimeStepMelody(Melody):
 
             rows.append({
                 'offset': offset,
-                'improvised_pitch': improvised_pitch + transpose_interval,
+                'improvised_pitch': improvised_pitch,
                 'improvised_attack': improvised_attack,
-                'original_pitch': original_pitch + transpose_interval,
+                'original_pitch': original_pitch,
                 'original_attack': original_attack,
                 'chord_name': chord_name
             })
@@ -138,7 +144,7 @@ class TimeStepMelody(Melody):
         return pd.DataFrame(rows)
 
     # TODO move to subclass?
-    def encode_poly(self, improvised_filepath, original_filepath, transpose_interval):
+    def encode_poly(self, improvised_filepath, original_filepath):
         improvised = pd.read_csv(improvised_filepath, index_col=0)
         improvised['end_ticks'] = improvised['ticks'] + improvised['duration']
 
@@ -174,9 +180,9 @@ class TimeStepMelody(Melody):
 
             rows.append({
                 'offset': offset,
-                'improvised_sustains': improvised_sustains + transpose_interval,
+                'improvised_sustains': improvised_sustains,
                 'improvised_attacks': improvised_attacks,
-                'original_sustains': original_sustains + transpose_interval,
+                'original_sustains': original_sustains,
                 'original_attacks': original_attacks,
                 'chord_name': chord_name
             })
@@ -184,7 +190,8 @@ class TimeStepMelody(Melody):
             return pd.DataFrame(rows)
 
     # TODO choice for which extensions to add is a bit random
-    def extended_chord_encoding(self, chord_pitches, chord_notes_count):
+    @staticmethod
+    def extended_chord_encoding(chord_pitches, chord_notes_count):
         upper_extension_index = -3
 
         # If 13th chord, remove 11th
@@ -199,27 +206,24 @@ class TimeStepMelody(Melody):
                 return np.array(sorted(chord_pitches))
 
             # Append extensions to fill up 'chord_notes_count' notes
-            upper_extension = chord_pitches[upper_extension_index] + self.OCTAVE_SEMITONES
+            upper_extension = chord_pitches[upper_extension_index] + TimeStepMelody.OCTAVE_SEMITONES
             chord_pitches.append(upper_extension)
 
-    def create_padded_tensors(self, sequence_size):
-        padded_tensors = []
-
-        loop_start = 0 - (sequence_size - 1)
+    def create_padded_tensors(self, sequence_size, transpose_interval):
+        loop_start = 0 - sequence_size
         loop_end = self.encoded.shape[0]
 
         for offset_start in np.arange(loop_start, loop_end):
             start_idx = offset_start
             end_idx = offset_start + sequence_size
 
-            padded_tensor = self.create_padded_tensor(start_idx, end_idx)
-            padded_tensors.append(padded_tensor[None, :, :].int())
+            padded_tensor = self.create_padded_tensor(start_idx, end_idx, transpose_interval)
 
-        return padded_tensors
+            yield padded_tensor[None, :, :].int()
 
-    def create_padded_tensor(self, start_idx, end_idx):
+    def create_padded_tensor(self, start_idx, end_idx, transpose_interval):
         assert start_idx < end_idx
-        assert end_idx > 0
+        assert end_idx >= 0
 
         length = self.encoded.shape[0]
 
@@ -232,24 +236,24 @@ class TimeStepMelody(Melody):
 
         # TODO providing original melody on padding - might want to change it later if it affects learning
 
+        common_sliced_data = self.encoded.iloc[np.arange(start_idx, end_idx) % length]
+
         original_pitches = torch.from_numpy(
-            np.array([self.encoded.iloc[np.arange(start_idx, end_idx) % length]['original_pitch'].fillna(128)])
+            np.array([(common_sliced_data['original_pitch'] +
+                       transpose_interval).fillna(128)])
         ).long().clone()
 
         original_attacks = torch.from_numpy(
-            np.array([self.encoded.iloc[np.arange(start_idx, end_idx) % length]['original_attack']])
+            np.array([common_sliced_data['original_attack']])
         ).long().clone()
-
-        # TODO using extended chord encoding - try other kinds later
-        chord_encoding = self.extended_chord_encoding
 
         chord_pitches = torch.from_numpy(
             np.stack(
-                self.encoded.iloc[np.arange(start_idx, end_idx) % length]['chord_name']
-                    .apply(Chord) \
-                    .apply(lambda x: x.getMIDI()) \
-                    .apply(chord_encoding, chord_notes_count=7)
-            )).long().clone().transpose(0, 1)
+                common_sliced_data['chord_name'].apply(
+                    lambda x: np.array(self.chord_mapping[x]) + transpose_interval
+                )
+            )
+        ).long().clone().transpose(0, 1)
 
         # TODO check which symbols to use for padding
 
@@ -273,7 +277,7 @@ class TimeStepMelody(Melody):
         sliced_data = self.encoded.iloc[slice_start:slice_end]
 
         center_improvised_pitches = torch.from_numpy(
-            np.array(sliced_data[['improvised_pitch']].fillna(128))
+            np.array((sliced_data[['improvised_pitch']] + transpose_interval).fillna(128))
         ).long().clone().transpose(0, 1)
 
         center_improvised_attacks = torch.from_numpy(
