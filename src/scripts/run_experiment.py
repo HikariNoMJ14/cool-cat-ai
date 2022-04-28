@@ -6,7 +6,7 @@ import torch
 import mlflow
 import yaml
 
-from src.dataset import Dataset
+from src.dataset import MelodyDataset
 from src.model import MonoTimeStepModel
 
 logger = logging.getLogger()
@@ -47,20 +47,27 @@ if __name__ == "__main__":
     sequence_size = int(dataset_config['sequence_size'])
 
     model_config = config['model']
+    start_symbol = int(model_config['start_symbol'])
+    end_symbol = int(model_config['end_symbol'])
+
     offset_size = int(model_config['offset_size'])
     pitch_size = int(model_config['pitch_size'])
     attack_size = int(model_config['attack_size'])
     metadata_size = int(model_config['metadata_size'])
+
     embedding_size = int(model_config['embedding_size'])
     lstm_num_layers = int(model_config['lstm_num_layers'])
     lstm_hidden_size = int(model_config['lstm_hidden_size'])
     nn_hidden_size = int(model_config['nn_hidden_size'])
     nn_output_size = int(model_config['nn_output_size'])
+
     embedding_dropout_rate = float(model_config['embedding_dropout_rate'])
     lstm_dropout_rate = float(model_config['lstm_dropout_rate'])
     nn_dropout_rate = float(model_config['nn_dropout_rate'])
+
     normalize = bool(model_config['normalize'])
     gradient_clipping = float(model_config['gradient_clipping'])
+
     pitch_loss_weight = float(model_config['pitch_loss_weight'])
     attack_loss_weight = float(model_config['attack_loss_weight'])
 
@@ -91,6 +98,8 @@ if __name__ == "__main__":
     mlflow.log_param('transpose_mode', transpose_mode)
     mlflow.log_param('sequence_size', sequence_size)
 
+    mlflow.log_param('start_symbol', start_symbol)
+    mlflow.log_param('end_symbol', end_symbol)
     mlflow.log_param('offset_size', offset_size)
     mlflow.log_param('pitch_size', pitch_size)
     mlflow.log_param('attack_size', attack_size)
@@ -115,7 +124,7 @@ if __name__ == "__main__":
     mlflow.log_param('momentum', momentum)
     mlflow.log_param('weight_decay', weight_decay)
 
-    dataset = Dataset(
+    melody_dataset = MelodyDataset(
         encoding_type=encoding_type,
         polyphonic=polyphonic,
         chord_encoding_type=chord_encoding_type,
@@ -123,17 +132,19 @@ if __name__ == "__main__":
         transpose_mode=transpose_mode,
         sequence_size=sequence_size
     )
-    dataset.load()
+    melody_dataset.load()
 
-    print(dataset.tensor_dataset)
+    print(melody_dataset.dataset)
 
-    mlflow.log_param('dataset', dataset.name)
-    mlflow.log_param('num_examples', len(dataset.tensor_dataset))
+    mlflow.log_param('dataset', melody_dataset.name)
+    mlflow.log_param('num_examples', len(melody_dataset.dataset))
 
     model = MonoTimeStepModel(
-        dataset=dataset,
+        dataset=melody_dataset,
         logger=logger,
         save_path=run.info.artifact_uri,
+        start_symbol=start_symbol,
+        end_symbol=end_symbol,
         offset_size=offset_size,
         pitch_size=pitch_size,
         attack_size=attack_size,

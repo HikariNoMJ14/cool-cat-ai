@@ -10,7 +10,6 @@ from torch import nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 
-from src.dataset import Dataset
 from src.utils import Metric
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -69,21 +68,28 @@ class MonoTimeStepModel(nn.Module):
 
         self.logger.info('--- Init Model ---')
 
+        self.start_symbol = kwargs['start_symbol']
+        self.end_symbol = kwargs['end_symbol']
+
         # Set model parameters
         self.offset_size = kwargs['offset_size']
         self.pitch_size = kwargs['pitch_size']
         self.attack_size = kwargs['attack_size']
         self.metadata_size = kwargs['metadata_size']
+
         self.embedding_size = kwargs['embedding_size']
-        self.embedding_dropout_rate = kwargs['embedding_dropout_rate']
         self.lstm_num_layers = kwargs['lstm_num_layers']
         self.lstm_hidden_size = kwargs['lstm_hidden_size']
-        self.lstm_dropout_rate = kwargs['lstm_dropout_rate']
         self.nn_hidden_size = kwargs['nn_hidden_size']
         self.nn_output_size = kwargs['nn_output_size']
+
+        self.embedding_dropout_rate = kwargs['embedding_dropout_rate']
+        self.lstm_dropout_rate = kwargs['lstm_dropout_rate']
         self.nn_dropout_rate = kwargs['nn_dropout_rate']
+
         self.normalize = kwargs['normalize']
         self.gradient_clipping = kwargs['gradient_clipping']
+
         self.pitch_loss_weight = kwargs['pitch_loss_weight']
         self.attack_loss_weight = kwargs['attack_loss_weight']
 
@@ -351,29 +357,28 @@ class MonoTimeStepModel(nn.Module):
             for epoch in range(1, num_epochs + 1):
                 epoch_start_time = time.time()
 
-                train_dataloader, \
-                val_dataloader, \
-                test_dataloader = self.dataset.data_loaders(
-                    batch_size=batch_size,
+                train_dataset, \
+                val_dataset, \
+                test_dataset = self.dataset.split(
                     split=(.85, .15, 0),
                     seed=seed
                 )
 
                 if epoch == 1:
-                    self.logger.info(f'Number of training   examples: {len(train_dataloader)}')
-                    self.logger.info(f'Number of validation examples: {len(val_dataloader)}')
+                    self.logger.info(f'Number of training   examples: {len(train_dataset)}')
+                    self.logger.info(f'Number of validation examples: {len(val_dataset)}')
 
                 self.logger.info(f'--- Epoch {epoch} ---')
 
                 train_loss, train_metrics = self.loss_and_accuracy(
-                    dataloader=train_dataloader,
+                    dataset=train_dataset,
                     optimizer=optimizer,
                     phase='train',
                     batch_size=batch_size
                 )
 
                 valid_loss, valid_metrics = self.loss_and_accuracy(
-                    dataloader=val_dataloader,
+                    dataset=val_dataset,
                     optimizer=optimizer,
                     phase='test',
                     batch_size=batch_size
@@ -467,7 +472,7 @@ class MonoTimeStepModel(nn.Module):
                 with open(checkpoint_path, 'wb') as f:
                     torch.save(self, f)
 
-    def loss_and_accuracy(self, dataloader, phase, optimizer, batch_size):
+    def loss_and_accuracy(self, dataset, phase, optimizer, batch_size):
         if phase == 'train':
             self.train()
         elif phase == 'eval' or phase == 'test':
@@ -479,11 +484,10 @@ class MonoTimeStepModel(nn.Module):
         logging_metrics = {k: Metric() for k in self.METRICS_LIST}
         start_time = time.time()
 
-        num_batches = len(self.dataset.tensor_dataset) // batch_size
+        num_batches = self.get_num_batches(dataset, batch_size)
 
-        for i, batch in enumerate(dataloader):
-            # batch = Variable(batch[:, 0, :, :], volatile=self.VOLATILE).long().cuda()
-            batch = Variable(batch[0], volatile=self.VOLATILE).long().cuda()
+        for i in range(num_batches):
+            batch = self.get_batch(dataset, batch_size)
 
             past, present, future, label = self.prepare_examples(batch)
             output_pitch, output_attack = self(past, present, future)
@@ -531,6 +535,94 @@ class MonoTimeStepModel(nn.Module):
             avg_metrics[name] = metrics[name].avg
 
         return avg_loss, avg_metrics
+
+    def get_num_batches(self, dataset, batch_size):
+        total_len = 0
+        for example in dataset:
+            total_len += example.size(0)
+
+        return int(total_len // batch_size)
+
+    def get_batch(self, dataset, batch_size):
+        batch = []
+
+        for i in range(batch_size):
+            random_example_idx = np.random.randint(0, len(dataset))
+            chosen_example = dataset[random_example_idx]
+            random_idx = np.random.randint(-self.sequence_size, len(chosen_example), batch_size)
+
+            padded_tensor = self.create_padded_tensor(chosen_example, random_idx)[None, :, :].cuda()
+            batch.append(padded_tensor)
+
+        return torch.cat(batch, 0)
+
+    def create_padded_tensor(self, example, index):
+        start_idx = index
+        end_idx = index + self.sequence_size
+
+        length = example.size(0)
+
+        padded_improvised_pitches = []
+        padded_improvised_attacks = []
+
+        common_sliced_data = example[np.arange(start_idx, end_idx) % length]
+
+        offsets = common_sliced_data[None, :, 0]
+        original_pitches = common_sliced_data[None, :, 1]
+        original_attacks = common_sliced_data[None, :, 2]
+
+        chord_pitches = torch.from_numpy(
+            np.stack(
+                common_sliced_data[:, 5:12]
+            )
+        ).long().clone().transpose(0, 1)
+
+        if start_idx < 0:
+            left_improvised_pitches = torch.from_numpy(
+                np.array([self.start_symbol])
+            ).long().clone().repeat(-start_idx, 1).transpose(0, 1)
+
+            left_improvised_attacks = torch.from_numpy(
+                np.array([0])
+            ).long().clone().repeat(-start_idx, 1).transpose(0, 1)
+
+            padded_improvised_pitches.append(left_improvised_pitches)
+            padded_improvised_attacks.append(left_improvised_attacks)
+
+        slice_start = start_idx if start_idx > 0 else 0
+        slice_end = end_idx if end_idx < length else length
+
+        sliced_data = example[slice_start:slice_end]
+
+        center_improvised_pitches = sliced_data[None, :, 1]
+        center_improvised_attacks = sliced_data[None, :, 2]
+
+        padded_improvised_pitches.append(center_improvised_pitches)
+        padded_improvised_attacks.append(center_improvised_attacks)
+
+        if end_idx > length:
+            right_improvised_pitches = torch.from_numpy(
+                np.array([self.end_symbol])
+            ).long().clone().repeat(end_idx - length, 1).transpose(0, 1)
+
+            right_improvised_attacks = torch.from_numpy(
+                np.array([0])
+            ).long().clone().repeat(end_idx - length, 1).transpose(0, 1)
+
+            padded_improvised_pitches.append(right_improvised_pitches)
+            padded_improvised_attacks.append(right_improvised_attacks)
+
+        improvised_pitches = torch.cat(padded_improvised_pitches, 1)
+        improvised_attacks = torch.cat(padded_improvised_attacks, 1)
+
+        return torch.cat([
+            offsets,
+            improvised_pitches,
+            improvised_attacks,
+            original_pitches,
+            original_attacks,
+            chord_pitches
+        ], 0).transpose(0, 1)
 
     def prepare_examples(self, batch):
         batch_size, sequence_size, time_step_size = batch.size()
@@ -618,7 +710,7 @@ class MonoTimeStepModel(nn.Module):
             'pitch_top1': pitch_top1, 'pitch_top3': pitch_top3, 'pitch_top5': pitch_top5,
             'attack_top1': attack_top1
         }
-        
+
         total_loss = self.pitch_loss_weight * pitch_loss + \
                      self.attack_loss_weight * attack_loss
 

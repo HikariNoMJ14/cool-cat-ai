@@ -11,6 +11,9 @@ dataset:
   sequence_size: 192
 
 model:
+  start_symbol: 129
+  end_symbol: 130
+
   offset_size: 48
   pitch_size: 131
   attack_size: 1

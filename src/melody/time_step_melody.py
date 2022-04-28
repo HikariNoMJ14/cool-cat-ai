@@ -209,99 +209,34 @@ class TimeStepMelody(Melody):
             upper_extension = chord_pitches[upper_extension_index] + TimeStepMelody.OCTAVE_SEMITONES
             chord_pitches.append(upper_extension)
 
-    def create_padded_tensors(self, sequence_size, transpose_interval):
-        loop_start = 0 - sequence_size
-        loop_end = self.encoded.shape[0]
-
-        for offset_start in np.arange(loop_start, loop_end):
-            start_idx = offset_start
-            end_idx = offset_start + sequence_size
-
-            padded_tensor = self.create_padded_tensor(start_idx, end_idx, transpose_interval)
-
-            yield padded_tensor[None, :, :].int()
-
-    def create_padded_tensor(self, start_idx, end_idx, transpose_interval):
-        assert start_idx < end_idx
-        assert end_idx >= 0
-
-        length = self.encoded.shape[0]
-
-        padded_improvised_pitches = []
-        padded_improvised_attacks = []
-
+    def to_tensor(self, transpose_interval):
         offsets = torch.from_numpy(
-            np.array([np.arange(start_idx, end_idx) % 48])
+            np.array([self.encoded['offset']])
         ).long().clone()
 
-        # TODO providing original melody on padding - might want to change it later if it affects learning
+        improvised_pitches = torch.from_numpy(
+            np.array((self.encoded[['improvised_pitch']] + transpose_interval).fillna(128))
+        ).long().clone().transpose(0, 1)
 
-        common_sliced_data = self.encoded.iloc[np.arange(start_idx, end_idx) % length]
+        improvised_attacks = torch.from_numpy(
+            np.array(self.encoded[['improvised_attack']])
+        ).long().clone().transpose(0, 1)
 
         original_pitches = torch.from_numpy(
-            np.array([(common_sliced_data['original_pitch'] +
-                       transpose_interval).fillna(128)])
+            np.array([(self.encoded['original_pitch'] + transpose_interval).fillna(128)])
         ).long().clone()
 
         original_attacks = torch.from_numpy(
-            np.array([common_sliced_data['original_attack']])
+            np.array([self.encoded['original_attack']])
         ).long().clone()
 
         chord_pitches = torch.from_numpy(
             np.stack(
-                common_sliced_data['chord_name'].apply(
+                self.encoded['chord_name'].apply(
                     lambda x: np.array(self.chord_mapping[x]) + transpose_interval
                 )
             )
         ).long().clone().transpose(0, 1)
-
-        # TODO check which symbols to use for padding
-
-        # Left padding
-        if start_idx < 0:
-            left_improvised_pitches = torch.from_numpy(
-                np.array([self.START_SYMBOL])
-            ).long().clone().repeat(-start_idx, 1).transpose(0, 1)
-
-            left_improvised_attacks = torch.from_numpy(
-                np.array([0])
-            ).long().clone().repeat(-start_idx, 1).transpose(0, 1)
-
-            padded_improvised_pitches.append(left_improvised_pitches)
-            padded_improvised_attacks.append(left_improvised_attacks)
-
-        # Center
-        slice_start = start_idx if start_idx > 0 else 0
-        slice_end = end_idx if end_idx < length else length
-
-        sliced_data = self.encoded.iloc[slice_start:slice_end]
-
-        center_improvised_pitches = torch.from_numpy(
-            np.array((sliced_data[['improvised_pitch']] + transpose_interval).fillna(128))
-        ).long().clone().transpose(0, 1)
-
-        center_improvised_attacks = torch.from_numpy(
-            np.array(sliced_data[['improvised_attack']])
-        ).long().clone().transpose(0, 1)
-
-        padded_improvised_pitches.append(center_improvised_pitches)
-        padded_improvised_attacks.append(center_improvised_attacks)
-
-        # Right padding
-        if end_idx > length:
-            right_improvised_pitches = torch.from_numpy(
-                np.array([self.END_SYMBOL])
-            ).long().clone().repeat(end_idx - length, 1).transpose(0, 1)
-
-            right_improvised_attacks = torch.from_numpy(
-                np.array([0])
-            ).long().clone().repeat(end_idx - length, 1).transpose(0, 1)
-
-            padded_improvised_pitches.append(right_improvised_pitches)
-            padded_improvised_attacks.append(right_improvised_attacks)
-
-        improvised_pitches = torch.cat(padded_improvised_pitches, 1)
-        improvised_attacks = torch.cat(padded_improvised_attacks, 1)
 
         return torch.cat([
             offsets,
@@ -310,7 +245,7 @@ class TimeStepMelody(Melody):
             original_pitches,
             original_attacks,
             chord_pitches
-        ], 0).transpose(0, 1)  # Do transpose?
+        ], 0).transpose(0, 1)
 
     def to_midi(
             self,
