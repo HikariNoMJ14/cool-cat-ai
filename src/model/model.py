@@ -482,8 +482,8 @@ class MonoTimeStepModel(nn.Module):
         num_batches = len(self.dataset.tensor_dataset) // batch_size
 
         for i, batch in enumerate(dataloader):
-            batch = Variable(batch[:, 0, :, :], volatile=self.VOLATILE).long().cuda()
-            # batch = Variable(batch[0], volatile=self.VOLATILE).long().cuda()
+            # batch = Variable(batch[:, 0, :, :], volatile=self.VOLATILE).long().cuda()
+            batch = Variable(batch[0], volatile=self.VOLATILE).long().cuda()
 
             past, present, future, label = self.prepare_examples(batch)
             output_pitch, output_attack = self(past, present, future)

@@ -6,7 +6,7 @@ import torch
 import mlflow
 import yaml
 
-from src.dataset import SplitDataset
+from src.dataset import Dataset
 from src.model import MonoTimeStepModel
 
 logger = logging.getLogger()
@@ -115,7 +115,7 @@ if __name__ == "__main__":
     mlflow.log_param('momentum', momentum)
     mlflow.log_param('weight_decay', weight_decay)
 
-    dataset = SplitDataset(
+    dataset = Dataset(
         encoding_type=encoding_type,
         polyphonic=polyphonic,
         chord_encoding_type=chord_encoding_type,
@@ -128,7 +128,7 @@ if __name__ == "__main__":
     print(dataset.tensor_dataset)
 
     mlflow.log_param('dataset', dataset.name)
-    mlflow.log_param('num_examples', len(dataset))
+    mlflow.log_param('num_examples', len(dataset.tensor_dataset))
 
     model = MonoTimeStepModel(
         dataset=dataset,
