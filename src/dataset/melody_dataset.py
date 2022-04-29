@@ -1,6 +1,7 @@
 import os
+import sys
 from glob import glob
-import pickle
+import logging
 from datetime import datetime
 import torch
 import numpy as np
@@ -8,6 +9,14 @@ from torch.utils.data import ConcatDataset
 
 from src.melody import TimeStepMelody
 from src.utils import get_chord_progressions, filepath_to_song_name
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logFormatter = logging.Formatter('%(levelname)7s - %(message)s')
+
+consoleHandler = logging.StreamHandler(sys.stdout)
+consoleHandler.setFormatter(logFormatter)
+logger.addHandler(consoleHandler)
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
@@ -76,15 +85,6 @@ class MelodyDataset:
 
         self.improvised_filepaths = self.get_filepaths('improvised')
         self.original_filepaths = self.get_filepaths('original')
-
-    def __len__(self):
-        total_len = 0
-
-        for melody in self.dataset:
-            # total_len += len(melody) + int(np.ceil((self.sequence_size / 2) - 1)) * 2
-            total_len += len(melody)
-
-        return total_len // self.sequence_size
 
     def get_filepaths(self, mode):
         filepaths = []
@@ -181,19 +181,19 @@ class MelodyDataset:
         else:
             transpose_intervals = [0]
 
-        for transpose_interval in transpose_intervals:
-            if len(transpose_intervals) > 1:
-                print(f'Transpose Interval: {transpose_interval}')
+        for improvised_filepath in self.improvised_filepaths:
+            logger.info(improvised_filepath)
 
-            for improvised_filepath in self.improvised_filepaths:
-                print(improvised_filepath)
+            time_step_melody = TimeStepMelody(improvised_filepath, polyphonic=False)
+            time_step_melody.set_song_structure(self.chord_progressions[time_step_melody.song_name])
 
-                time_step_melody = TimeStepMelody(improvised_filepath, polyphonic=False)
-                time_step_melody.set_song_structure(self.chord_progressions[time_step_melody.song_name])
+            original_filepath = self.get_original_filepath(time_step_melody.song_name)
 
-                original_filepath = self.get_original_filepath(time_step_melody.song_name)
+            time_step_melody.encode(improvised_filepath, original_filepath)
 
-                time_step_melody.encode(improvised_filepath, original_filepath)
+            for transpose_interval in transpose_intervals:
+                if len(transpose_intervals) > 1:
+                    logger.debug(f'Transpose Interval: {transpose_interval}')
 
                 melody_tensor = time_step_melody.to_tensor(transpose_interval)[None, :, :]
 
