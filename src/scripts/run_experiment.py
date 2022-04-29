@@ -72,6 +72,7 @@ if __name__ == "__main__":
     attack_loss_weight = float(model_config['attack_loss_weight'])
 
     training_config = config['training']
+    num_batches = int(training_config['num_batches'])
     batch_size = int(training_config['batch_size'])
     num_epochs = int(training_config['num_epochs'])
     seed = int(training_config['seed'])
@@ -117,6 +118,7 @@ if __name__ == "__main__":
     mlflow.log_param('pitch_loss_weight', pitch_loss_weight)
     mlflow.log_param('attack_loss_weight', attack_loss_weight)
 
+    mlflow.log_param('num_batches', num_batches)
     mlflow.log_param('batch_size', batch_size)
     mlflow.log_param('num_epochs', num_epochs)
     mlflow.log_param('seed', seed)
@@ -183,6 +185,7 @@ if __name__ == "__main__":
         mlflow.end_run(status)
 
     model.train_and_eval(
+        num_batches=num_batches,
         batch_size=batch_size,
         num_epochs=num_epochs,
         optimizer=optimizer,

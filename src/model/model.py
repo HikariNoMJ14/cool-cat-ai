@@ -321,7 +321,7 @@ class MonoTimeStepModel(nn.Module):
         self.encode_pitch.weight.data = F.normalize(self.encode_pitch.weight, p=2, dim=1)
         self.encode_duration.weight.data = F.normalize(self.encode_duration.weight, p=2, dim=1)
 
-    def train_and_eval(self, batch_size, num_epochs, optimizer, scheduler, seed, callback):
+    def train_and_eval(self, num_batches, batch_size, num_epochs, optimizer, scheduler, seed, callback):
         self.name = f'{self.dataset.name}_batchsize_{batch_size}_seed_{seed}'
 
         checkpoint_path = os.path.join(self.save_path, self.name + '.pt')
@@ -374,7 +374,8 @@ class MonoTimeStepModel(nn.Module):
                     dataset=train_dataset,
                     optimizer=optimizer,
                     phase='train',
-                    batch_size=batch_size
+                    batch_size=batch_size,
+                    num_batches=num_batches
                 )
 
                 valid_loss, valid_metrics = self.loss_and_accuracy(
@@ -472,7 +473,7 @@ class MonoTimeStepModel(nn.Module):
                 with open(checkpoint_path, 'wb') as f:
                     torch.save(self, f)
 
-    def loss_and_accuracy(self, dataset, phase, optimizer, batch_size):
+    def loss_and_accuracy(self, dataset, phase, optimizer, batch_size, num_batches=None):
         if phase == 'train':
             self.train()
         elif phase == 'eval' or phase == 'test':
@@ -484,7 +485,8 @@ class MonoTimeStepModel(nn.Module):
         logging_metrics = {k: Metric() for k in self.METRICS_LIST}
         start_time = time.time()
 
-        num_batches = self.get_num_batches(dataset, batch_size)
+        if num_batches is None:
+            num_batches = self.get_num_batches(dataset, batch_size)
 
         for i in range(num_batches):
             batch = self.get_batch(dataset, batch_size)
@@ -549,7 +551,7 @@ class MonoTimeStepModel(nn.Module):
         for i in range(batch_size):
             random_example_idx = np.random.randint(0, len(dataset))
             chosen_example = dataset[random_example_idx]
-            random_idx = np.random.randint(-self.sequence_size, len(chosen_example), batch_size)
+            random_idx = np.random.randint(-self.sequence_size, len(chosen_example))
 
             padded_tensor = self.create_padded_tensor(chosen_example, random_idx)[None, :, :].cuda()
             batch.append(padded_tensor)
