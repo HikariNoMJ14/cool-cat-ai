@@ -146,23 +146,23 @@ class MelodyDataset:
         for improvised_filepath in self.improvised_filepaths:
             self.logger.info(improvised_filepath)
 
-            time_step_melody = self.melody_class(
+            melody = self.melody_class(
                 filepath=improvised_filepath,
                 polyphonic=False,
                 duration_correction=self.duration_correction
             )
-            time_step_melody.set_song_structure(self.chord_progressions[time_step_melody.song_name])
+            melody.set_song_structure(self.chord_progressions[melody.song_name])
 
-            original_filepath = get_original_filepath(time_step_melody.song_name)
+            original_filepath = get_original_filepath(melody.song_name)
 
-            time_step_melody.encode(improvised_filepath, original_filepath)
-            time_step_melody.save_encoded()
+            melody.encode(improvised_filepath, original_filepath)
+            melody.save_encoded()
 
             for transpose_interval in transpose_intervals:
                 if len(transpose_intervals) > 1:
                     self.logger.debug(f'Transpose Interval: {transpose_interval}')
 
-                melody_tensor = time_step_melody.to_tensor(transpose_interval)
+                melody_tensor = melody.to_tensor(transpose_interval)
 
                 datasets.append(melody_tensor)
 

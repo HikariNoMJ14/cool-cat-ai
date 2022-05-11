@@ -11,7 +11,7 @@ from src.ezchord import Chord
 from src.utils import   is_weakly_polyphonic, is_strongly_polyphonic, \
                         remove_weak_polyphony, remove_strong_polyphony, \
                         flatten_chord_progression
-from src.utils.constants import OCTAVE_SEMITONES
+from src.utils.constants import OCTAVE_SEMITONES, REST_SYMBOL
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
@@ -224,7 +224,7 @@ class TimeStepMelody(Melody):
         ).long().clone()
 
         improvised_pitches = torch.from_numpy(
-            np.array((self.encoded[['improvised_pitch']] + transpose_interval).fillna(128))
+            np.array((self.encoded[['improvised_pitch']] + transpose_interval).fillna(REST_SYMBOL))
         ).long().clone().transpose(0, 1)
 
         improvised_attacks = torch.from_numpy(
@@ -232,7 +232,7 @@ class TimeStepMelody(Melody):
         ).long().clone().transpose(0, 1)
 
         original_pitches = torch.from_numpy(
-            np.array([(self.encoded['original_pitch'] + transpose_interval).fillna(128)])
+            np.array([(self.encoded['original_pitch'] + transpose_interval).fillna(REST_SYMBOL)])
         ).long().clone()
 
         original_attacks = torch.from_numpy(

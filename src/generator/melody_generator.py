@@ -11,7 +11,7 @@ from torch.autograd import Variable
 
 from src.melody import TimeStepMelody
 from src.utils import get_chord_progressions, get_original_filepath
-from src.utils.constants import TICKS_PER_MEASURE
+from src.utils.constants import TICKS_PER_MEASURE, REST_SYMBOL
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
@@ -61,7 +61,7 @@ class MelodyGenerator:
         ).long().clone()
 
         original_pitches = torch.from_numpy(
-            np.array([(self.melody.encoded['original_pitch'] + transpose_interval).fillna(128)])
+            np.array([(self.melody.encoded['original_pitch'] + transpose_interval).fillna(REST_SYMBOL)])
         ).long().clone()
 
         original_attacks = torch.from_numpy(
@@ -242,7 +242,8 @@ class MelodyGenerator:
         return new_pitch, new_attack
 
     def save(self):
-        self.melody.encoded['improvised_pitch'] = pd.Series(data=self.generated_improvised_pitches).replace(128, np.nan)
+        self.melody.encoded['improvised_pitch'] = pd.Series(data=self.generated_improvised_pitches).replace(REST_SYMBOL,
+                                                                                                            np.nan)
         self.melody.encoded['improvised_attack'] = pd.Series(data=self.generated_improvised_attacks)
 
         out_path = os.path.join(

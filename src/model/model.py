@@ -336,7 +336,7 @@ class Model(nn.Module):
             mid_point = self.sequence_size // 2
             random_idx = np.random.randint(-mid_point, len(chosen_example) - mid_point)
 
-            padded_example = self.create_padded_tensor(chosen_example, random_idx)[None, :, :]
+            padded_example = self.create_padded_tensor(chosen_example, random_idx)
             batch.append(padded_example)
 
         return torch.cat(batch, 0)

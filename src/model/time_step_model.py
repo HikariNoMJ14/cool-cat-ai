@@ -11,7 +11,7 @@ dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
 
 
-class MonoTimeStepModel(Model):
+class TimeStepModel(Model):
     # Input data semantics
     TENSOR_IDX_MAPPING = {
         'offset': 0,
@@ -52,7 +52,7 @@ class MonoTimeStepModel(Model):
     PLOTTED_METRICS = ['loss', 'ppl', 'pitch_loss', 'attack_loss']
 
     def __init__(self, dataset=None, logger=None, save_path=os.path.join(src_path, 'results'), **kwargs):
-        super(MonoTimeStepModel, self).__init__(dataset, logger, save_path, **kwargs)
+        super(TimeStepModel, self).__init__(dataset, logger, save_path, **kwargs)
 
         # Set model parameters
         self.attack_size = kwargs['attack_size']
@@ -235,13 +235,13 @@ class MonoTimeStepModel(Model):
         return output_improvised_pitch, output_improvised_attack
 
     def prepare_examples(self, batch):
-        batch_size, sequence_size, time_step_size = batch.size()
+        batch_size, sequence_size, _ = batch.size()
         middle_tick = sequence_size // 2
 
-        assert batch[:, middle_tick:middle_tick + 1, 1].eq(129).count_nonzero() == 0
-        assert batch[:, middle_tick:middle_tick + 1, 1].eq(130).count_nonzero() == 0
-        assert batch[:, middle_tick, 1].eq(130).count_nonzero() == 0
-        assert batch[:, middle_tick + 1:, 1].eq(129).count_nonzero() == 0
+        assert batch[:, middle_tick:middle_tick + 1, 1].eq(self.start_symbol).count_nonzero() == 0
+        assert batch[:, middle_tick:middle_tick + 1, 1].eq(self.end_symbol).count_nonzero() == 0
+        assert batch[:, middle_tick, 1].eq(self.end_symbol).count_nonzero() == 0
+        assert batch[:, middle_tick + 1:, 1].eq(self.start_symbol).count_nonzero() == 0
 
         past_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
                                for feature in self.FEATURES['past']]
@@ -363,7 +363,7 @@ class MonoTimeStepModel(Model):
             chord_pitches
         ], 0).transpose(0, 1).cuda()
 
-        return padded_example
+        return padded_example[None, :, :]
 
     def loss_function(self, prediction, label):
         output_pitch = prediction[0]

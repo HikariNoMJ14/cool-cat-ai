@@ -7,7 +7,7 @@ import mlflow
 import yaml
 
 from src.dataset import MelodyDataset
-from src.model import MonoTimeStepModel
+from src.model import TimeStepModel, DurationModel
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -54,6 +54,7 @@ if __name__ == "__main__":
     offset_size = int(model_config['offset_size'])
     pitch_size = int(model_config['pitch_size'])
     attack_size = int(model_config['attack_size'])
+    duration_size = int(model_config['duration_size'])
     metadata_size = int(model_config['metadata_size'])
 
     embedding_size = int(model_config['embedding_size'])
@@ -71,6 +72,7 @@ if __name__ == "__main__":
 
     pitch_loss_weight = float(model_config['pitch_loss_weight'])
     attack_loss_weight = float(model_config['attack_loss_weight'])
+    duration_loss_weight = float(model_config['duration_loss_weight'])
 
     training_config = config['training']
     num_batches = int(training_config['num_batches'])
@@ -106,6 +108,7 @@ if __name__ == "__main__":
     mlflow.log_param('offset_size', offset_size)
     mlflow.log_param('pitch_size', pitch_size)
     mlflow.log_param('attack_size', attack_size)
+    mlflow.log_param('duration_size', duration_size)
     mlflow.log_param('metadata_size', metadata_size)
     mlflow.log_param('embedding_size', embedding_size)
     mlflow.log_param('embedding_dropout_rate', embedding_dropout_rate)
@@ -119,6 +122,7 @@ if __name__ == "__main__":
     mlflow.log_param('gradient_clipping', gradient_clipping)
     mlflow.log_param('pitch_loss_weight', pitch_loss_weight)
     mlflow.log_param('attack_loss_weight', attack_loss_weight)
+    mlflow.log_param('duration_loss_weight', duration_loss_weight)
 
     mlflow.log_param('num_batches', num_batches)
     mlflow.log_param('batch_size', batch_size)
@@ -127,6 +131,13 @@ if __name__ == "__main__":
     mlflow.log_param('learning_rate', learning_rate)
     mlflow.log_param('momentum', momentum)
     mlflow.log_param('weight_decay', weight_decay)
+
+    if encoding_type == 'timestep':
+        model_class = TimeStepModel
+    elif encoding_type == 'duration':
+        model_class = DurationModel
+    else:
+        raise Exception(f'Unknown encoding type: {encoding_type}')
 
     melody_dataset = MelodyDataset(
         encoding_type=encoding_type,
@@ -143,7 +154,7 @@ if __name__ == "__main__":
     mlflow.log_param('dataset', melody_dataset.name)
     mlflow.log_param('num_examples', len(melody_dataset.dataset))
 
-    model = MonoTimeStepModel(
+    model = model_class(
         dataset=melody_dataset,
         logger=logger,
         save_path=run.info.artifact_uri,
@@ -152,6 +163,7 @@ if __name__ == "__main__":
         offset_size=offset_size,
         pitch_size=pitch_size,
         attack_size=attack_size,
+        duration_size=duration_size,
         metadata_size=metadata_size,
         embedding_size=embedding_size,
         embedding_dropout_rate=embedding_dropout_rate,
@@ -164,7 +176,8 @@ if __name__ == "__main__":
         normalize=normalize,
         gradient_clipping=gradient_clipping,
         pitch_loss_weight=pitch_loss_weight,
-        attack_loss_weight=attack_loss_weight
+        attack_loss_weight=attack_loss_weight,
+        duration_loss_weight=duration_loss_weight
     )
 
     optimizer = torch.optim.SGD(
