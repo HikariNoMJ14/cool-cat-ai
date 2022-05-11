@@ -10,7 +10,7 @@ from src.ezchord import Chord
 from src.utils import get_chord_progressions, is_weakly_polyphonic, is_strongly_polyphonic, \
     remove_weak_polyphony, remove_strong_polyphony, \
     flatten_chord_progression
-from src.utils.constants import OCTAVE_SEMITONES
+from src.utils.constants import OCTAVE_SEMITONES, REST_SYMBOL
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
@@ -65,7 +65,7 @@ class DurationMelody(Melody):
             if is_weakly_polyphonic(improvised):
                 improvised = remove_weak_polyphony(improvised)
 
-            encoded.append(self.create_encoded_dataset(improvised, 'improvised'))
+            encoded.append(self.encode_melody(improvised, 'improvised'))
 
         original = pd.read_csv(original_filepath, index_col=0).reset_index(drop=True)
         original['end_ticks'] = original['ticks'] + original['duration']
@@ -77,11 +77,11 @@ class DurationMelody(Melody):
         if is_weakly_polyphonic(original):
             original = remove_weak_polyphony(original)
 
-        encoded.append(self.create_encoded_dataset(original, 'original'))
+        encoded.append(self.encode_melody(original, 'original'))
 
         return pd.concat(encoded, axis=0)
 
-    def create_encoded_dataset(self, dataset, phase):
+    def encode_melody(self, dataset, phase):
         rows = []
         bpm = self.chord_progression_time_signature[0]
         ftpm = self.FINAL_TICKS_PER_BEAT * bpm
@@ -180,7 +180,7 @@ class DurationMelody(Melody):
         ).long().clone()
 
         improvised_pitches = torch.from_numpy(
-            np.array((improvised_encoded[['pitch']] + transpose_interval).fillna(128))
+            np.array((improvised_encoded[['pitch']] + transpose_interval).fillna(REST_SYMBOL))
         ).long().clone().transpose(0, 1)
 
         improvised_duration = torch.from_numpy(
@@ -209,7 +209,7 @@ class DurationMelody(Melody):
         ).long().clone()
 
         original_pitches = torch.from_numpy(
-            np.array([(original_encoded['pitch'] + transpose_interval).fillna(128)])
+            np.array([(original_encoded['pitch'] + transpose_interval).fillna(REST_SYMBOL)])
         ).long().clone()
 
         original_duration = torch.from_numpy(

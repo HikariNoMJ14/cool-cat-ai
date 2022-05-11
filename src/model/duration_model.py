@@ -146,6 +146,8 @@ class DurationModel(Model):
             nn.Linear(self.nn_hidden_size, merge_nn_output_size)
         )
 
+        self.duration_decoder = nn.Linear(self.embedding_size, self.duration_size)
+
         # Tie duration encoder and decoder weights
         self.duration_decoder.weight = self.duration_encoder[0].weight
 
@@ -218,7 +220,7 @@ class DurationModel(Model):
         past_original_lstm_input = self.prepare_past_lstm_input(past_original)
         past_original_lstm_hidden = self.init_hidden(batch_size=past_original.size(0))
         past_original_lstm_output, \
-        past_original_lstm_hidden = self.past_lstm(
+        past_original_lstm_hidden = self.past_original_lstm(
             past_original_lstm_input,
             past_original_lstm_hidden
         )
@@ -228,7 +230,7 @@ class DurationModel(Model):
         past_improvised_lstm_input = self.prepare_past_lstm_input(past_improvised)
         past_improvised_lstm_hidden = self.init_hidden(batch_size=past_improvised.size(0))
         past_improvised_lstm_output, \
-        past_improvised_lstm_hidden = self.past_lstm(
+        past_improvised_lstm_hidden = self.past_improvised_lstm(
             past_improvised_lstm_input,
             past_improvised_lstm_hidden
         )
@@ -264,13 +266,13 @@ class DurationModel(Model):
         return output_improvised_pitch, output_improvised_duration
 
     def prepare_examples(self, batch):
-        batch_size, sequence_size, time_step_size = batch.size()
+        batch_size, sequence_size, _ = batch.size()
         middle_tick = sequence_size // 2
 
-        assert batch[:, middle_tick:middle_tick + 1, 1].eq(129).count_nonzero() == 0
-        assert batch[:, middle_tick:middle_tick + 1, 1].eq(130).count_nonzero() == 0
-        assert batch[:, middle_tick, 1].eq(130).count_nonzero() == 0
-        assert batch[:, middle_tick + 1:, 1].eq(129).count_nonzero() == 0
+        assert batch[:, middle_tick:middle_tick + 1, 1].eq(self.start_symbol).count_nonzero() == 0
+        assert batch[:, middle_tick:middle_tick + 1, 1].eq(self.end_symbol).count_nonzero() == 0
+        assert batch[:, middle_tick, 1].eq(self.end_symbol).count_nonzero() == 0
+        assert batch[:, middle_tick + 1:, 1].eq(self.start_symbol).count_nonzero() == 0
 
         past_original_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
                                for feature in self.FEATURES['past_original']]
@@ -402,7 +404,7 @@ class DurationModel(Model):
             chord_pitches
         ], 0).transpose(0, 1).cuda()
 
-        return padded_example
+        return padded_example[None, :, :]
 
     def normalize_embeddings(self):
         super().normalize_embeddings()
