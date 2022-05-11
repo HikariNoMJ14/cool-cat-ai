@@ -1,6 +1,7 @@
 # TODO move to own files
 import os
 import re
+from glob import glob
 import copy
 import json
 
@@ -14,6 +15,10 @@ import mingus.core.notes as notes
 
 from src.objective_metrics import calculate_HC, calculate_silence_ratio
 from src.utils.metrics import Metric
+from src.utils.constants import SOURCES, INPUT_DATA_FOLDER
+
+dir_path = os.path.dirname(os.path.realpath(__file__))
+src_path = os.path.join(dir_path, '..', '..')
 
 melody_names = ['melody', 'melodia', 'melodía', 'lead']
 non_melody_names = ['bass', 'bajo', 'basso', 'baixo', 'drum', 'percussion', 'batería', 'bateria', 'chord', 'rhythm',
@@ -32,6 +37,24 @@ non_melody_programs = bass_programs + \
                       synth_effect_programs + \
                       percussive_programs + \
                       sound_effect_programs
+
+
+def get_filepaths(mode):
+    filepaths = []
+    for source in SOURCES[mode]:
+        filepaths += [y for x in os.walk(os.path.join(INPUT_DATA_FOLDER, source))
+                      for y in glob(os.path.join(x[0], '*.csv'))]
+    return filepaths
+
+
+def get_original_filepath(song_name):
+    original_filepaths = [filepath for filepath in get_filepaths('original')
+                          if filepath_to_song_name(filepath) == song_name]
+
+    if len(original_filepaths) > 1:
+        raise Exception(f'Multiple original files match the song name {song_name}, {original_filepaths}')
+
+    return original_filepaths[0]
 
 
 # not working properly
@@ -191,6 +214,35 @@ def is_weakly_polyphonic(melody):
 
 def is_strongly_polyphonic(melody):
     return melody['ticks'].shape[0] > melody['ticks'].nunique()
+
+
+def remove_weak_polyphony(melody):
+    new_melody = melody.copy()
+
+    overlap = (new_melody['end_ticks'] - new_melody['ticks'].shift(-1)).clip(0, None)
+
+    # skip last row as 'shift' messes it up
+    new_melody.iloc[:-1, new_melody.columns.get_loc('duration')] -= overlap.iloc[:-1]
+    new_melody.iloc[:-1, new_melody.columns.get_loc('end_ticks')] -= overlap.iloc[:-1]
+
+    if is_weakly_polyphonic(new_melody):
+        raise Exception('Error!!! Weak polyphony not removed correctly')
+
+    return new_melody
+
+
+def remove_strong_polyphony(melody):
+    new_melody = melody.copy()
+
+    new_melody = new_melody\
+        .sort_values('pitch', ascending=False)\
+        .drop_duplicates('ticks')\
+        .sort_values('ticks')
+
+    if is_strongly_polyphonic(new_melody):
+        raise Exception('Error!!! Strong polyphony not removed correctly')
+
+    return new_melody
 
 
 def midi_to_notes(midi_file: str) -> pd.DataFrame:

@@ -8,7 +8,10 @@ import json
 
 from src.melody import Melody
 from src.ezchord import Chord
-from src.utils import is_weakly_polyphonic, is_strongly_polyphonic, flatten_chord_progression
+from src.utils import   is_weakly_polyphonic, is_strongly_polyphonic, \
+                        remove_weak_polyphony, remove_strong_polyphony, \
+                        flatten_chord_progression
+from src.utils.constants import OCTAVE_SEMITONES
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
@@ -21,11 +24,8 @@ chord_mapping_filepath = os.path.join(src_path, 'data', 'tensor_dataset', 'chord
 
 class TimeStepMelody(Melody):
     VERSION = '1.2'
-    OCTAVE_SEMITONES = 12
-    START_SYMBOL = 129
-    END_SYMBOL = 130
 
-    def __init__(self, filepath, polyphonic):
+    def __init__(self, filepath, polyphonic, duration_correction):
         super(TimeStepMelody, self).__init__(filepath, self.VERSION)
 
         self.encoded = None
@@ -37,6 +37,8 @@ class TimeStepMelody(Melody):
             'timestep',
             'poly' if self.polyphonic else 'mono',
         )
+        self.duration_correction = duration_correction
+
         # TODO pass chord encoding type
         with open(chord_mapping_filepath) as fp:
             self.chord_mapping = json.load(fp)
@@ -53,58 +55,36 @@ class TimeStepMelody(Melody):
 
         self.encoded = encoded
 
-        # Save encoded file
-        self.encoded.to_csv(f'{self.encoded_folder}/{self.source}')
-
     def encode_mono(self, improvised_filepath, original_filepath):
-        improvised = pd.read_csv(improvised_filepath, index_col=0)
-        improvised['end_ticks'] = improvised['ticks'] + improvised['duration']
-        improvised.sort_values('ticks', inplace=True)
+        if improvised_filepath is not None:
+            improvised = pd.read_csv(improvised_filepath, index_col=0)
+            improvised['end_ticks'] = improvised['ticks'] + improvised['duration']
+            improvised.sort_values('ticks', inplace=True)
+
+            if is_strongly_polyphonic(improvised):
+                improvised = remove_strong_polyphony(improvised)
+
+            if is_weakly_polyphonic(improvised):
+                improvised = remove_weak_polyphony(improvised)
 
         original = pd.read_csv(original_filepath, index_col=0)
         original['end_ticks'] = original['ticks'] + original['duration']
         original.sort_values('ticks', inplace=True)
+
+        if is_strongly_polyphonic(original):
+            original = remove_strong_polyphony(original)
+
+        if is_weakly_polyphonic(original):
+            original = remove_weak_polyphony(original)
 
         flat_chord_progression = flatten_chord_progression(self.song_structure)
         num_chord_progression_beats = int(len(flat_chord_progression))
 
         n_ticks = self.FINAL_TICKS_PER_BEAT * num_chord_progression_beats
 
-        if is_strongly_polyphonic(improvised):
-            improvised = self.remove_strong_polyphony(improvised)
-
-        if is_weakly_polyphonic(improvised):
-            improvised = self.remove_weak_polyphony(improvised)
-
-        if is_strongly_polyphonic(original):
-            original = self.remove_strong_polyphony(original)
-
-        if is_weakly_polyphonic(original):
-            original = self.remove_weak_polyphony(original)
-
         rows = []
         for i in range(n_ticks):
             offset = i % (self.FINAL_TICKS_PER_BEAT * self.chord_progression_time_signature[0])
-
-            improvised_pitch = np.nan
-            improvised_pitches = improvised[
-                (improvised['ticks'] <= i) & (i < improvised['end_ticks'])
-                ]
-
-            if len(improvised_pitches) > 0:
-                improvised_pitch = improvised_pitches['pitch'].values[0]
-
-                if len(improvised_pitches) > 1:
-                    raise Exception('Error!!! not mono pitch on improvised')
-
-            improvised_attack = 0
-            improvised_attacks = improvised[improvised['ticks'] == i]
-
-            if len(improvised_attacks) > 0:
-                improvised_attack = 1
-
-                if len(improvised_attacks) > 1:
-                    raise Exception('Error!!! not mono attack on improvised')
 
             original_pitch = np.nan
             original_pitches = original[
@@ -126,6 +106,29 @@ class TimeStepMelody(Melody):
 
                 if len(original_attacks) > 1:
                     raise Exception('Error!!! not mono attack on original')
+
+            improvised_pitch = np.nan
+            improvised_attack = 0
+
+            if improvised_filepath is not None:
+
+                improvised_pitches = improvised[
+                    (improvised['ticks'] <= i) & (i < improvised['end_ticks'])
+                    ]
+
+                if len(improvised_pitches) > 0:
+                    improvised_pitch = improvised_pitches['pitch'].values[0]
+
+                    if len(improvised_pitches) > 1:
+                        raise Exception('Error!!! not mono pitch on improvised')
+
+                improvised_attacks = improvised[improvised['ticks'] == i]
+
+                if len(improvised_attacks) > 0:
+                    improvised_attack = 1
+
+                    if len(improvised_attacks) > 1:
+                        raise Exception('Error!!! not mono attack on improvised')
 
             chord_name = flat_chord_progression[(i // self.FINAL_TICKS_PER_BEAT)]
 
@@ -189,6 +192,12 @@ class TimeStepMelody(Melody):
 
             return pd.DataFrame(rows)
 
+    def save_encoded(self):
+        if not os.path.exists(f'{self.encoded_folder}/{self.source}'):
+            os.makedirs(f'{self.encoded_folder}/{self.source}')
+
+        self.encoded.to_csv(f'{self.encoded_folder}/{self.source}/{self.filename}')
+
     # TODO choice for which extensions to add is a bit random
     @staticmethod
     def extended_chord_encoding(chord_pitches, chord_notes_count):
@@ -206,7 +215,7 @@ class TimeStepMelody(Melody):
                 return np.array(sorted(chord_pitches))
 
             # Append extensions to fill up 'chord_notes_count' notes
-            upper_extension = chord_pitches[upper_extension_index] + TimeStepMelody.OCTAVE_SEMITONES
+            upper_extension = chord_pitches[upper_extension_index] + OCTAVE_SEMITONES
             chord_pitches.append(upper_extension)
 
     def to_tensor(self, transpose_interval):
@@ -245,12 +254,11 @@ class TimeStepMelody(Melody):
             original_pitches,
             original_attacks,
             chord_pitches
-        ], 0).transpose(0, 1)
+        ], 0).transpose(0, 1)[None, :, :]
 
     def to_midi(
             self,
-            chord_progression: dict,
-            out_file: str,
+            out_filepath: str,
             out_bpm: int = 120,
     ):
         melody_instrument_name = "Tenor Sax"
@@ -258,9 +266,10 @@ class TimeStepMelody(Melody):
 
         p = pm.PrettyMIDI()
         ts = pm.TimeSignature(
-            self.time_signature[0],
-            self.time_signature[1],
-            0)
+            self.chord_progression_time_signature[0],
+            self.chord_progression_time_signature[1],
+            0
+        )
 
         p.time_signature_changes.append(ts)
 
@@ -277,7 +286,7 @@ class TimeStepMelody(Melody):
 
         self.encoded['ticks'] = self.encoded.index
 
-        attack_df = self.encoded[self.encoded['improvised_attack'] is True]
+        attack_df = self.encoded[self.encoded['improvised_attack'] == True]
         attack_df.reset_index(inplace=True)
 
         for i, row in attack_df.iterrows():
@@ -307,8 +316,8 @@ class TimeStepMelody(Melody):
         start = 0
         use_tonic = True
 
-        for section in chord_progression['sections']:
-            for chord_name in chord_progression['progression'][section]:
+        for section in self.song_structure['sections']:
+            for chord_name in self.song_structure['progression'][section]:
                 chord_notes = Chord(chord_name).getMIDI()
 
                 if use_tonic:
@@ -339,4 +348,4 @@ class TimeStepMelody(Melody):
 
         p.instruments.append(chords)
 
-        p.write(out_file)
+        p.write(out_filepath)

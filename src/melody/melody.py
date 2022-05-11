@@ -90,43 +90,15 @@ class Melody:
         self.split_melody_folder = f'{src_path}/data/split_melody/v{version}'
         self.finalised_melody_folder = f'{src_path}/data/finalised'
 
-        self.folder = filepath.split('/')[-3]
-        self.source = filepath.split('/')[-2]
-        self.filepath = filepath
-        self.filename = os.path.basename(filepath)
-        self.aligned_filepath = filepath.replace(self.folder, 'aligned_melodies')
-        self.song_name = filepath_to_song_name(filepath)
+        if filepath is not None:
+            self.folder = filepath.split('/')[-3]
+            self.source = filepath.split('/')[-2]
+            self.filepath = filepath
+            self.filename = os.path.basename(filepath)
+            self.aligned_filepath = filepath.replace(self.folder, 'aligned_melodies')
+            self.song_name = filepath_to_song_name(filepath)
 
-        self.original = self.source in self.original_sources
-
-    @staticmethod
-    def remove_weak_polyphony(melody):
-        new_melody = melody.copy()
-
-        overlap = (new_melody['end_ticks'] - new_melody['ticks'].shift(-1)).clip(0, None)
-
-        # skip last row as 'shift' messes it up
-        new_melody.iloc[:-1, new_melody.columns.get_loc('duration')] -= overlap.iloc[:-1]
-        new_melody.iloc[:-1, new_melody.columns.get_loc('end_ticks')] -= overlap.iloc[:-1]
-
-        if is_weakly_polyphonic(new_melody):
-            raise Exception('Error!!! Weak polyphony not removed correctly')
-
-        return new_melody
-
-    @staticmethod
-    def remove_strong_polyphony(melody):
-        new_melody = melody.copy()
-
-        new_melody = new_melody\
-            .sort_values('pitch', ascending=False)\
-            .drop_duplicates('ticks')\
-            .sort_values('ticks')
-
-        if is_strongly_polyphonic(new_melody):
-            raise Exception('Error!!! Strong polyphony not removed correctly')
-
-        return new_melody
+            self.original = self.source in self.original_sources
 
     @no_errors
     def setup(self):

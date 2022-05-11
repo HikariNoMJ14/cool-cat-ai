@@ -16,48 +16,13 @@ dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
 
 
-class MonoTimeStepModel(nn.Module):
-    # Input data semantics
-    TENSOR_IDX_MAPPING = {
-        'offset': 0,
-        'improvised_pitch': 1,
-        'improvised_attack': 2,
-        'original_pitch': 3,
-        'original_attack': 4,
-        'chord_pitches_start': 5
-    }
+class Model(nn.Module):
 
-    FEATURES = {
-        'past': [
-            'offset',
-            'improvised_pitch', 'improvised_attack',
-            'original_pitch', 'original_attack'
-        ],
-        # TODO Add metadata
-        'present': [
-            'offset',
-            'original_pitch', 'original_attack'
-        ],
-        'future': [
-            'offset',
-            'original_pitch', 'original_attack'
-        ]
-    }
-
-    LABELS = [
-        'improvised_pitch', 'improvised_attack'
-    ]
-
-    METRICS_LIST = [
-        'pitch_loss', 'attack_loss',
-        'pitch_top1', 'pitch_top3', 'pitch_top5',
-        'attack_top1'
-    ]
     VOLATILE = False
     LOG_INTERVAL = 500
 
-    def __init__(self, dataset, logger, save_path=os.path.join(src_path, 'results'), **kwargs):
-        super(MonoTimeStepModel, self).__init__()
+    def __init__(self, dataset=None, logger=None, save_path=os.path.join(src_path, 'results'), **kwargs):
+        super(Model, self).__init__()
 
         self.name = ''
         self.save_dir = os.path.join(src_path, 'results')
@@ -68,13 +33,14 @@ class MonoTimeStepModel(nn.Module):
 
         self.logger.info('--- Init Model ---')
 
+        self.logger.info(f'Using dataset: {dataset.name}')
+
         self.start_symbol = kwargs['start_symbol']
         self.end_symbol = kwargs['end_symbol']
 
         # Set model parameters
         self.offset_size = kwargs['offset_size']
         self.pitch_size = kwargs['pitch_size']
-        self.attack_size = kwargs['attack_size']
         self.metadata_size = kwargs['metadata_size']
 
         self.embedding_size = kwargs['embedding_size']
@@ -91,7 +57,6 @@ class MonoTimeStepModel(nn.Module):
         self.gradient_clipping = kwargs['gradient_clipping']
 
         self.pitch_loss_weight = kwargs['pitch_loss_weight']
-        self.attack_loss_weight = kwargs['attack_loss_weight']
 
         self.sequence_size = dataset.sequence_size
         self.chord_extension_count = dataset.chord_extension_count
@@ -105,7 +70,6 @@ class MonoTimeStepModel(nn.Module):
         self.pitch_loss_function = nn.CrossEntropyLoss(
             # ignore_index=129 # TODO ignore padding value? what about 130?
         )
-        self.attack_loss_function = nn.BCEWithLogitsLoss()
 
         # TODO change to locked_drop?
         self.offset_encoder = nn.Sequential(
@@ -118,84 +82,14 @@ class MonoTimeStepModel(nn.Module):
         )
         # TODO add padding_idx for 128 (rest)? what about START_SYMBOL and END_SYMBOL?
 
-        #  offset +
-        #  improvised_pitch + improvised_attack +
-        #  original_pitch + original_attack +
-        #  chord_pitch * number_of_pitches
-        past_lstm_input_size = self.embedding_size + \
-                               self.embedding_size + self.attack_size + \
-                               self.embedding_size + self.attack_size + \
-                               self.embedding_size * self.chord_extension_count \
-            if self.chord_encoding_type != 'compressed' \
-            else 12
-
-        self.logger.debug(f'Model past LSTM input size: {past_lstm_input_size}')
-
-        self.past_lstm = nn.LSTM(
-            input_size=past_lstm_input_size,
-            hidden_size=self.lstm_hidden_size,
-            num_layers=self.lstm_num_layers,
-            dropout=self.lstm_dropout_rate,
-            batch_first=True
-        )
-
-        #  offset +
-        #  original_pitch + original_attack +
-        #  metadata +
-        #  chord_pitch * number_of_pitches
-        present_nn_input_size = self.embedding_size + \
-                                self.embedding_size + self.attack_size + \
-                                self.metadata_size + \
-                                self.embedding_size * self.chord_extension_count \
-            if self.chord_encoding_type != 'compressed' \
-            else 12
-
-        self.logger.debug(f'Model present LSTM input size: {present_nn_input_size}')
-
-        self.present_nn = nn.Sequential(
-            nn.Linear(present_nn_input_size, self.nn_hidden_size),
-            nn.ReLU(),
-            nn.Dropout(self.nn_dropout_rate),
-            nn.Linear(self.nn_hidden_size, self.nn_output_size),
-            nn.ReLU(),
-            nn.Dropout(self.nn_dropout_rate)  # TODO check if performance degrades with many epochs
-        )
-
-        #  offset +
-        #  original_pitch + original_attack +
-        #  chord_pitch * number_of_pitches
-        future_lstm_input_size = self.embedding_size + \
-                                 self.embedding_size + self.attack_size + \
-                                 self.embedding_size * self.chord_extension_count \
-            if self.chord_encoding_type != 'compressed' \
-            else 12
-
-        self.logger.debug(f'Model future LSTM input size: {future_lstm_input_size}')
-
-        self.future_lstm = nn.LSTM(
-            input_size=future_lstm_input_size,
-            hidden_size=self.lstm_hidden_size,
-            num_layers=self.lstm_num_layers,
-            dropout=self.lstm_dropout_rate,
-            batch_first=True
-        )
-
-        merge_nn_input_size = self.lstm_hidden_size + self.nn_output_size + self.lstm_hidden_size
-        merge_nn_output_size = self.embedding_size + self.attack_size
-
-        self.merge_nn = nn.Sequential(
-            nn.Linear(merge_nn_input_size, self.nn_hidden_size),
-            nn.ReLU(),
-            nn.Dropout(self.nn_dropout_rate),
-            nn.Linear(self.nn_hidden_size, merge_nn_output_size)
-        )
-
         self.pitch_decoder = nn.Linear(self.embedding_size, self.pitch_size)
 
         # Tie pitch encoder and decoder weights
         self.pitch_decoder.weight = self.pitch_encoder[0].weight
 
-    # From DeepBach
+    def load(self, model_path):
+        self.load_state_dict(torch.load(open(model_path, 'rb')))
+
     def init_hidden(self, batch_size):
         hidden = (
             torch.randn(self.lstm_num_layers, batch_size, self.lstm_hidden_size).cuda(),
@@ -210,116 +104,17 @@ class MonoTimeStepModel(nn.Module):
 
         return chord_pitches_embedding
 
-    # TODO refactor - move impro_pitch and attack to end of tensor -> remove idx param
+    # TODO refactor
     def extract_features(self, tensor, feature_name, idx):
         feature_tensor = tensor[:, :, idx]
 
         return torch.squeeze(feature_tensor).contiguous().view(tensor.size(0), -1)
 
-    # TODO refactor - move impro_pitch and attack to end of tensor -> remove idx param
+    # TODO refactor
     def extract_chords(self, tensor, idx):
         chord_tensor = tensor[:, :, idx[0]:idx[1] + 1]
 
         return torch.squeeze(chord_tensor).contiguous().view(tensor.size(0), tensor.size(1), -1)
-
-    def prepare_past_lstm_input(self, past):
-        # Extract features from past tensor
-        past_offsets = self.extract_features(past, 'offset', 0)
-        past_improvised_pitches = self.extract_features(past, 'improvised_pitch', 1)
-        past_improvised_attacks = self.extract_features(past, 'improvised_attack', 2)
-        past_original_pitches = self.extract_features(past, 'original_pitch', 3)
-        past_original_attacks = self.extract_features(past, 'original_attack', 4)
-        past_chord_pitches = self.extract_chords(past, (5, 12))
-
-        # Encode past offsets and pitches
-        past_offset_embedding = self.offset_encoder(past_offsets)
-        past_improvised_pitch_embedding = self.pitch_encoder(past_improvised_pitches)
-        past_original_pitch_embedding = self.pitch_encoder(past_original_pitches)
-        past_chord_pitches_embedding = self.encode_chord_pitches(past_chord_pitches)
-        past_improvised_attacks = past_improvised_attacks[:, :, None]
-        past_original_attacks = past_original_attacks[:, :, None]
-
-        return torch.cat([
-            past_offset_embedding,
-            past_improvised_pitch_embedding, past_improvised_attacks,
-            past_original_pitch_embedding, past_original_attacks,
-            past_chord_pitches_embedding
-        ], 2)
-
-    def prepare_present_nn_input(self, present):
-        # Extract features from present tensor
-        present_offsets = self.extract_features(present, 'offset', 0)
-        present_original_pitches = self.extract_features(present, 'original_pitch', 1)
-        present_original_attacks = self.extract_features(present, 'original_attack', 2)
-        present_chord_pitches = self.extract_chords(present, (3, 10))
-
-        # Encode present offsets and pitches
-        present_offset_embedding = self.offset_encoder(present_offsets)
-        present_original_pitch_embedding = self.pitch_encoder(present_original_pitches)
-        present_chord_pitches_embedding = self.encode_chord_pitches(present_chord_pitches)
-        present_original_attacks = present_original_attacks[:, :, None]
-
-        return torch.cat([
-            present_offset_embedding,
-            present_original_pitch_embedding, present_original_attacks,
-            present_chord_pitches_embedding
-        ], 2)
-
-    def prepare_future_lstm_input(self, future):
-        # Extract features from future tensor
-        future_offsets = self.extract_features(future, 'offset', 0)
-        future_original_pitches = self.extract_features(future, 'original_pitch', 1)
-        future_original_attacks = self.extract_features(future, 'original_attack', 2)
-        future_chord_pitches = self.extract_chords(future, (3, 10))
-
-        # Encode future offsets and pitches
-        future_offset_embedding = self.offset_encoder(future_offsets)
-        future_original_pitch_embedding = self.pitch_encoder(future_original_pitches)
-        future_chord_pitches_embedding = self.encode_chord_pitches(future_chord_pitches)
-        future_original_attacks = future_original_attacks[:, :, None]
-
-        return torch.cat([
-            future_offset_embedding,
-            future_original_pitch_embedding, future_original_attacks,
-            future_chord_pitches_embedding
-        ], 2)
-
-    def forward(self, past, present, future):
-        self.cuda()
-
-        # Past LSTM
-        past_lstm_input = self.prepare_past_lstm_input(past)
-        past_lstm_hidden = self.init_hidden(batch_size=past.size(0))
-        past_lstm_output, past_lstm_hidden = self.past_lstm(past_lstm_input, past_lstm_hidden)
-        past_lstm_output = past_lstm_output[:, -1, :]
-
-        # Present NN
-        present_nn_input = self.prepare_present_nn_input(present)
-        present_nn_input = present_nn_input.view(present.size(0), -1)
-        present_nn_output = self.present_nn(present_nn_input)
-
-        # Future LSTM
-        future_lstm_input = self.prepare_future_lstm_input(future)
-        future_lstm_hidden = self.init_hidden(batch_size=future.size(0))
-        future_lstm_output, future_lstm_hidden = self.future_lstm(future_lstm_input, future_lstm_hidden)
-        future_lstm_output = future_lstm_output[:, -1, :]
-
-        # Merge NN
-        merge_nn_input = torch.cat([past_lstm_output, present_nn_output, future_lstm_output], 1)
-        merge_nn_output = self.merge_nn(merge_nn_input)
-
-        output_improvised_pitch = self.pitch_decoder(torch.sigmoid(merge_nn_output[:, :self.embedding_size]))
-        output_improvised_attack = merge_nn_output[:, -self.attack_size:].view(-1)
-
-        if self.normalize:
-            output_improvised_pitch = F.normalize(output_improvised_pitch, p=2, dim=1)
-            output_improvised_attack = F.normalize(output_improvised_attack, p=2, dim=1)
-
-        return output_improvised_pitch, output_improvised_attack
-
-    def normalize_embeddings(self):
-        self.encode_pitch.weight.data = F.normalize(self.encode_pitch.weight, p=2, dim=1)
-        self.encode_duration.weight.data = F.normalize(self.encode_duration.weight, p=2, dim=1)
 
     def train_and_eval(self, num_batches, batch_size, num_epochs, optimizer, scheduler, seed, callback):
         self.name = f'{self.dataset.name}_batchsize_{batch_size}_seed_{seed}'
@@ -364,10 +159,6 @@ class MonoTimeStepModel(nn.Module):
                     seed=seed
                 )
 
-                if epoch == 1:
-                    self.logger.info(f'Number of training   examples: {len(train_dataset)}')
-                    self.logger.info(f'Number of validation examples: {len(val_dataset)}')
-
                 self.logger.info(f'--- Epoch {epoch} ---')
 
                 train_loss, train_metrics = self.loss_and_accuracy(
@@ -382,7 +173,8 @@ class MonoTimeStepModel(nn.Module):
                     dataset=val_dataset,
                     optimizer=optimizer,
                     phase='test',
-                    batch_size=batch_size
+                    batch_size=batch_size,
+                    num_batches=int(num_batches // 5)
                 )
 
                 training_str = ' | '.join([f'train_{k}: {v:5.2f}' for k, v in train_metrics.items()])
@@ -437,14 +229,7 @@ class MonoTimeStepModel(nn.Module):
 
             callback('FINISHED', training_results)
 
-            # Plot training results
-            for metric in ['loss', 'ppl', 'pitch_loss', 'attack_loss']:
-                fig, ax = plt.subplots(nrows=1, ncols=1)
-                for phase in ['train', 'valid']:
-                    ax.plot(training_results[f'{phase}_{metric}'], label=f'{phase}_{metric.replace("_", " ")}')
-                fig.legend(loc="upper right")
-                fig.savefig(os.path.join(self.save_path, f'{metric}.png'))
-                plt.close(fig)
+            self.plot_metrics(training_results)
 
             with open(checkpoint_path, 'wb') as f:
                 torch.save(self, f)
@@ -461,14 +246,7 @@ class MonoTimeStepModel(nn.Module):
             callback('KILLED', training_results)
 
             if len(training_results) > 0:
-                # Plot training results
-                for metric in ['loss', 'ppl', 'pitch_loss', 'attack_loss']:
-                    fig, ax = plt.subplots(nrows=1, ncols=1)
-                    for phase in ['train', 'valid']:
-                        ax.plot(training_results[f'{phase}_{metric}'], label=f'{phase}_{metric.replace("_", " ")}')
-                    fig.legend(loc="upper right")
-                    fig.savefig(os.path.join(self.save_path, f'{metric}.png'))
-                    plt.close(fig)
+                self.plot_metrics(training_results)
 
                 with open(checkpoint_path, 'wb') as f:
                     torch.save(self, f)
@@ -491,9 +269,9 @@ class MonoTimeStepModel(nn.Module):
         for i in range(num_batches):
             batch = self.get_batch(dataset, batch_size)
 
-            past, present, future, label = self.prepare_examples(batch)
-            output_pitch, output_attack = self(past, present, future)
-            current_loss, current_metrics = self.loss_function(output_pitch, output_attack, label)
+            features, label = self.prepare_examples(batch)
+            prediction = self(features)
+            current_loss, current_metrics = self.loss_function(prediction, label)
 
             if phase == 'train':
                 optimizer.zero_grad()
@@ -538,6 +316,9 @@ class MonoTimeStepModel(nn.Module):
 
         return avg_loss, avg_metrics
 
+    def normalize_embeddings(self):
+        self.pitch_decoder.weight.data = F.normalize(self.pitch_encoder.weight, p=2, dim=1)
+
     def get_num_batches(self, dataset, batch_size):
         total_len = 0
         for example in dataset:
@@ -551,129 +332,14 @@ class MonoTimeStepModel(nn.Module):
         for i in range(batch_size):
             random_example_idx = np.random.randint(0, len(dataset))
             chosen_example = dataset[random_example_idx]
-            random_idx = np.random.randint(-self.sequence_size, len(chosen_example))
 
-            padded_tensor = self.create_padded_tensor(chosen_example, random_idx)[None, :, :].cuda()
-            batch.append(padded_tensor)
+            mid_point = self.sequence_size // 2
+            random_idx = np.random.randint(-mid_point, len(chosen_example) - mid_point)
+
+            padded_example = self.create_padded_tensor(chosen_example, random_idx)[None, :, :]
+            batch.append(padded_example)
 
         return torch.cat(batch, 0)
-
-    def create_padded_tensor(self, example, index):
-        start_idx = index
-        end_idx = index + self.sequence_size
-
-        length = example.size(0)
-
-        padded_improvised_pitches = []
-        padded_improvised_attacks = []
-
-        common_sliced_data = example[np.arange(start_idx, end_idx) % length]
-
-        offsets = common_sliced_data[None, :, 0]
-        original_pitches = common_sliced_data[None, :, 1]
-        original_attacks = common_sliced_data[None, :, 2]
-
-        chord_pitches = torch.from_numpy(
-            np.stack(
-                common_sliced_data[:, 5:12]
-            )
-        ).long().clone().transpose(0, 1)
-
-        if start_idx < 0:
-            left_improvised_pitches = torch.from_numpy(
-                np.array([self.start_symbol])
-            ).long().clone().repeat(-start_idx, 1).transpose(0, 1)
-
-            left_improvised_attacks = torch.from_numpy(
-                np.array([0])
-            ).long().clone().repeat(-start_idx, 1).transpose(0, 1)
-
-            padded_improvised_pitches.append(left_improvised_pitches)
-            padded_improvised_attacks.append(left_improvised_attacks)
-
-        slice_start = start_idx if start_idx > 0 else 0
-        slice_end = end_idx if end_idx < length else length
-
-        sliced_data = example[slice_start:slice_end]
-
-        center_improvised_pitches = sliced_data[None, :, 1]
-        center_improvised_attacks = sliced_data[None, :, 2]
-
-        padded_improvised_pitches.append(center_improvised_pitches)
-        padded_improvised_attacks.append(center_improvised_attacks)
-
-        if end_idx > length:
-            right_improvised_pitches = torch.from_numpy(
-                np.array([self.end_symbol])
-            ).long().clone().repeat(end_idx - length, 1).transpose(0, 1)
-
-            right_improvised_attacks = torch.from_numpy(
-                np.array([0])
-            ).long().clone().repeat(end_idx - length, 1).transpose(0, 1)
-
-            padded_improvised_pitches.append(right_improvised_pitches)
-            padded_improvised_attacks.append(right_improvised_attacks)
-
-        improvised_pitches = torch.cat(padded_improvised_pitches, 1)
-        improvised_attacks = torch.cat(padded_improvised_attacks, 1)
-
-        return torch.cat([
-            offsets,
-            improvised_pitches,
-            improvised_attacks,
-            original_pitches,
-            original_attacks,
-            chord_pitches
-        ], 0).transpose(0, 1)
-
-    def prepare_examples(self, batch):
-        batch_size, sequence_size, time_step_size = batch.size()
-        middle_tick = sequence_size // 2
-
-        past_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
-                               for feature in self.FEATURES['past']]
-        past_tensor_indices += self.chord_tensor_idx
-        past = self.mask_entry(
-            batch[:, :middle_tick, :],
-            past_tensor_indices,
-            dim=2
-        )
-
-        # Remove improvised pitch and attack from present tick
-        present_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
-                                  for feature in self.FEATURES['present']]
-        present_tensor_indices += self.chord_tensor_idx
-        present = self.mask_entry(
-            batch[:, middle_tick:middle_tick + 1, :],
-            present_tensor_indices,
-            dim=2
-        )
-
-        # Reverse sequence for future ticks
-        reversed_tensor = self.reverse_tensor(
-            batch[:, middle_tick + 1:, :], dim=1
-        )
-        # Remove improvised pitch and attack from future ticks
-        future_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
-                                 for feature in self.FEATURES['future']]
-        future_tensor_indices += self.chord_tensor_idx
-        future = self.mask_entry(
-            reversed_tensor,
-            future_tensor_indices,
-            dim=2
-        )
-
-        # Remove everything but improvised pitch and attack to get label
-        label_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
-                                for feature in self.LABELS]
-        label = self.mask_entry(
-            batch[:, middle_tick:middle_tick + 1:, :],
-            label_tensor_indices,
-            dim=2
-        )
-        label = label.view(batch_size, -1)
-
-        return past, present, future, label
 
     def mask_entry(self, tensor, masked_indices, dim):
         idx = [i for i in range(tensor.size(dim)) if i in masked_indices]
@@ -689,34 +355,14 @@ class MonoTimeStepModel(nn.Module):
 
         return tensor
 
-    def loss_function(self, output_pitch, output_attack, label):
-        pitch_loss = self.pitch_loss_function(output_pitch, label[:, 0])
-        attack_loss = self.attack_loss_function(output_attack.float(), label[:, 1].float())
-
-        pitch_top1, \
-        pitch_top3, \
-        pitch_top5 = self.accuracy(
-            output_pitch,
-            label[:, 0].contiguous(),
-            topk=(1, 3, 5)
-        )
-
-        attack_top1, = self.accuracy(
-            output_attack[:, None],
-            label[:, 1].contiguous(),
-            topk=(1,)
-        )
-
-        metrics = {
-            'pitch_loss': pitch_loss, 'attack_loss': attack_loss,
-            'pitch_top1': pitch_top1, 'pitch_top3': pitch_top3, 'pitch_top5': pitch_top5,
-            'attack_top1': attack_top1
-        }
-
-        total_loss = self.pitch_loss_weight * pitch_loss + \
-                     self.attack_loss_weight * attack_loss
-
-        return total_loss, metrics
+    def plot_metrics(self, training_results):
+        for metric in self.PLOTTED_METRICS:
+            fig, ax = plt.subplots(nrows=1, ncols=1)
+            for phase in ['train', 'valid']:
+                ax.plot(training_results[f'{phase}_{metric}'], label=f'{phase}_{metric.replace("_", " ")}')
+            fig.legend(loc="upper right")
+            fig.savefig(os.path.join(self.save_path, f'{metric}.png'))
+            plt.close(fig)
 
     @staticmethod
     def accuracy(output, label, topk=(1,)):

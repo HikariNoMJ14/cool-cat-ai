@@ -13,11 +13,7 @@ import mingus.core
 import mingus.core.notes as notes
 
 from src.ezchord import Chord
-
-PITCH_CLS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
-N_PITCH_CLS = 12  # {C, C#, ..., Bb, B}
-TICKS_PER_MEASURE = 48
-REST_VAL = -1
+from src.utils.constants import TICKS_PER_MEASURE, REST_VAL, PITCH_CLS
 
 
 def compute_histogram_entropy(histogram):
@@ -32,12 +28,14 @@ def get_pitch_histogram(melody, pitches=range(128), verbose=False):
             print('The sequence contains no notes.')
         return None
 
-    pitches = pd.Series(pitches) % N_PITCH_CLS
+    n_pich_cls = len(PITCH_CLS)
+
+    pitches = pd.Series(pitches) % n_pich_cls
 
     histogram = pitches.value_counts(normalize=True)
 
-    hist = np.zeros((N_PITCH_CLS,))
-    for i in range(N_PITCH_CLS):
+    hist = np.zeros((n_pich_cls,))
+    for i in range(n_pich_cls):
         if i in histogram.index:
             hist[i] = histogram.loc[i]
 

@@ -1,22 +1,13 @@
 import os
-import sys
 from glob import glob
-import logging
 from datetime import datetime
 import torch
 import numpy as np
 from torch.utils.data import ConcatDataset
 
-from src.melody import TimeStepMelody
-from src.utils import get_chord_progressions, filepath_to_song_name
-
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-logFormatter = logging.Formatter('%(levelname)7s - %(message)s')
-
-consoleHandler = logging.StreamHandler(sys.stdout)
-consoleHandler.setFormatter(logFormatter)
-logger.addHandler(consoleHandler)
+from src.melody import TimeStepMelody, DurationMelody
+from src.utils import get_chord_progressions, get_filepaths, get_original_filepath
+from src.utils.constants import OCTAVE_SEMITONES
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
@@ -25,30 +16,15 @@ src_path = os.path.join(dir_path, '..', '..')
 class MelodyDataset:
     VERSION = '1.2'
 
-    OCTAVE_SEMITONES = 12
-
-    SOURCES = {
-        'original': [
-            'Real Book'
-        ],
-        'improvised': [
-            'Doug McKenzie',
-            'Jazz-Midi',
-            'Jazz Standards',
-            'JazzPage',
-            'MidKar',
-            'Oocities',
-            'Weimar DB'
-        ]
-    }
-
     def __init__(self,
                  encoding_type,
                  polyphonic,
                  sequence_size,
                  chord_encoding_type,
                  chord_extension_count,
-                 transpose_mode):
+                 duration_correction,
+                 transpose_mode,
+                 logger):
         super(MelodyDataset, self).__init__()
 
         self.dataset = None
@@ -61,16 +37,17 @@ class MelodyDataset:
         self.transpose_mode = transpose_mode
         self.chord_encoding_type = chord_encoding_type
         self.chord_extension_count = chord_extension_count
+        self.duration_correction = duration_correction
 
         self.melody_info = {}
         self.chord_progressions = get_chord_progressions(src_path)
 
-        self.input_data_folder = os.path.join(
-            src_path,
-            'data',
-            'finalised',
-            'csv',
-        )
+        if self.encoding_type == 'timestep':
+            self.melody_class = TimeStepMelody
+        elif self.encoding_type == 'duration':
+            self.melody_class = DurationMelody
+        else:
+            raise Exception('Encoding type not supported!')
 
         self.out_folder = os.path.join(
             src_path,
@@ -83,24 +60,9 @@ class MelodyDataset:
                     f'transpose_{self.transpose_mode}_' \
                     f'chord_{self.chord_encoding_type}_{self.chord_extension_count}'
 
-        self.improvised_filepaths = self.get_filepaths('improvised')
-        self.original_filepaths = self.get_filepaths('original')
+        self.improvised_filepaths = get_filepaths('improvised')
 
-    def get_filepaths(self, mode):
-        filepaths = []
-        for source in self.SOURCES[mode]:
-            filepaths += [y for x in os.walk(os.path.join(self.input_data_folder, source))
-                          for y in glob(os.path.join(x[0], '*.csv'))]
-        return filepaths
-
-    def get_original_filepath(self, song_name):
-        original_filepaths = [filepath for filepath in self.original_filepaths
-                              if filepath_to_song_name(filepath) == song_name]
-
-        if len(original_filepaths) > 1:
-            raise Exception(f'Multiple original files match the song name {song_name}, {original_filepaths}')
-
-        return original_filepaths[0]
+        self.logger = logger
 
     @staticmethod
     def is_valid_min_pitch(pitches):
@@ -121,9 +83,9 @@ class MelodyDataset:
             if self.is_valid_pitch_range(new_pitches):
                 return new_pitches
             elif not self.is_valid_max_pitch(new_pitches):
-                new_pitches -= self.OCTAVE_SEMITONES
+                new_pitches -= OCTAVE_SEMITONES
             elif not self.is_valid_min_pitch(new_pitches):
-                new_pitches += self.OCTAVE_SEMITONES
+                new_pitches += OCTAVE_SEMITONES
 
             if c > 20:
                 raise Exception(f'Valid pitch range can\'t be found')
@@ -182,20 +144,25 @@ class MelodyDataset:
             transpose_intervals = [0]
 
         for improvised_filepath in self.improvised_filepaths:
-            logger.info(improvised_filepath)
+            self.logger.info(improvised_filepath)
 
-            time_step_melody = TimeStepMelody(improvised_filepath, polyphonic=False)
+            time_step_melody = self.melody_class(
+                filepath=improvised_filepath,
+                polyphonic=False,
+                duration_correction=self.duration_correction
+            )
             time_step_melody.set_song_structure(self.chord_progressions[time_step_melody.song_name])
 
-            original_filepath = self.get_original_filepath(time_step_melody.song_name)
+            original_filepath = get_original_filepath(time_step_melody.song_name)
 
             time_step_melody.encode(improvised_filepath, original_filepath)
+            time_step_melody.save_encoded()
 
             for transpose_interval in transpose_intervals:
                 if len(transpose_intervals) > 1:
-                    logger.debug(f'Transpose Interval: {transpose_interval}')
+                    self.logger.debug(f'Transpose Interval: {transpose_interval}')
 
-                melody_tensor = time_step_melody.to_tensor(transpose_interval)[None, :, :]
+                melody_tensor = time_step_melody.to_tensor(transpose_interval)
 
                 datasets.append(melody_tensor)
 

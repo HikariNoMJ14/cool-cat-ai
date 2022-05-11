@@ -3,12 +3,13 @@ mlflow:
   run_name: default_run
 
 dataset:
-  encoding_type: timestep
+  encoding_type: duration
   polyphonic: False
   chord_encoding_type: extended
   chord_extension_count: 7
-  transpose_mode: all
-  sequence_size: 192
+  duration_correction: 0
+  transpose_mode: none
+  sequence_size: 193
 
 model:
   start_symbol: 129
@@ -36,7 +37,7 @@ model:
   attack_loss_weight: 0.5
 
 training:
-  num_batches: 100
+  num_batches: 5000
   batch_size: 64
   num_epochs: 35
   seed: 1234567890
