@@ -38,6 +38,8 @@ class Model(nn.Module):
         self.start_symbol = kwargs['start_symbol']
         self.end_symbol = kwargs['end_symbol']
 
+        self.sequence_size = kwargs['sequence_size']
+
         # Set model parameters
         self.offset_size = kwargs['offset_size']
         self.pitch_size = kwargs['pitch_size']
@@ -57,8 +59,6 @@ class Model(nn.Module):
         self.gradient_clipping = kwargs['gradient_clipping']
 
         self.pitch_loss_weight = kwargs['pitch_loss_weight']
-
-        self.sequence_size = dataset.sequence_size
         self.chord_extension_count = dataset.chord_extension_count
         self.chord_encoding_type = dataset.chord_encoding_type
 
@@ -68,7 +68,7 @@ class Model(nn.Module):
         ))
 
         self.pitch_loss_function = nn.CrossEntropyLoss(
-            # ignore_index=129 # TODO ignore padding value? what about 130?
+            # ignore_index=self.start_symbol # TODO ignore padding value? what about self.end_symbol?
         )
 
         # TODO change to locked_drop?
@@ -325,21 +325,6 @@ class Model(nn.Module):
             total_len += example.size(0)
 
         return int(total_len // batch_size)
-
-    def get_batch(self, dataset, batch_size):
-        batch = []
-
-        for i in range(batch_size):
-            random_example_idx = np.random.randint(0, len(dataset))
-            chosen_example = dataset[random_example_idx]
-
-            mid_point = self.sequence_size // 2
-            random_idx = np.random.randint(-mid_point, len(chosen_example) - mid_point)
-
-            padded_example = self.create_padded_tensor(chosen_example, random_idx)
-            batch.append(padded_example)
-
-        return torch.cat(batch, 0)
 
     def mask_entry(self, tensor, masked_indices, dim):
         idx = [i for i in range(tensor.size(dim)) if i in masked_indices]
