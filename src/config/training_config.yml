@@ -9,7 +9,7 @@ dataset:
   chord_extension_count: 7
   duration_correction: 0
   transpose_mode: none
-  sequence_size: 193
+  sequence_size: 100
 
 model:
   start_symbol: 129

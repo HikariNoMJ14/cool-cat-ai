@@ -146,7 +146,6 @@ if __name__ == "__main__":
         chord_extension_count=chord_extension_count,
         duration_correction=duration_correction,
         transpose_mode=transpose_mode,
-        sequence_size=sequence_size,
         logger=logger
     )
     melody_dataset.load()
@@ -158,6 +157,7 @@ if __name__ == "__main__":
         dataset=melody_dataset,
         logger=logger,
         save_path=run.info.artifact_uri,
+        sequence_size=sequence_size,
         start_symbol=start_symbol,
         end_symbol=end_symbol,
         offset_size=offset_size,

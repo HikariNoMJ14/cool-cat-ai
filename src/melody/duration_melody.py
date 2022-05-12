@@ -175,6 +175,14 @@ class DurationMelody(Melody):
     def to_tensor(self, transpose_interval):
         improvised_encoded = self.encoded[self.encoded['type'] == 'improvised']
 
+        improvised_flag = torch.from_numpy(
+            np.zeros((1, improvised_encoded.shape[0]))
+        ).long().clone()
+
+        improvised_ticks = torch.from_numpy(
+            np.array([improvised_encoded['ticks']])
+        ).long().clone()
+
         improvised_offsets = torch.from_numpy(
             np.array([improvised_encoded['offset']])
         ).long().clone()
@@ -196,6 +204,8 @@ class DurationMelody(Melody):
         ).long().clone().transpose(0, 1)
 
         improvised_tensor = torch.cat([
+            improvised_flag,
+            improvised_ticks,
             improvised_offsets,
             improvised_pitches,
             improvised_duration,
@@ -203,6 +213,14 @@ class DurationMelody(Melody):
         ], 0).transpose(0, 1)
 
         original_encoded = self.encoded[self.encoded['type'] == 'original']
+
+        original_flag = torch.from_numpy(
+            np.ones((1, original_encoded.shape[0]))
+        ).long().clone()
+
+        original_ticks = torch.from_numpy(
+            np.array([original_encoded['ticks']])
+        ).long().clone()
 
         original_offsets = torch.from_numpy(
             np.array([original_encoded['offset']])
@@ -225,16 +243,18 @@ class DurationMelody(Melody):
         ).long().clone().transpose(0, 1)
 
         original_tensor = torch.cat([
+            original_flag,
+            original_ticks,
             original_offsets,
             original_pitches,
             original_duration,
             original_chord_pitches
         ], 0).transpose(0, 1)
 
-        return (
+        return torch.cat([
             improvised_tensor,
             original_tensor
-        )
+        ], 0)[None, :, :]
 
     def to_midi(
             self,

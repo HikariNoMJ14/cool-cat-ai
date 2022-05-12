@@ -293,6 +293,21 @@ class TimeStepModel(Model):
 
         return (past, present, future), label
 
+    def get_batch(self, dataset, batch_size):
+        batch = []
+
+        for i in range(batch_size):
+            random_example_idx = np.random.randint(0, len(dataset))
+            chosen_example = dataset[random_example_idx]
+
+            mid_point = self.sequence_size // 2
+            random_idx = np.random.randint(-mid_point, len(chosen_example) - mid_point)
+
+            padded_example = self.create_padded_tensor(chosen_example, random_idx)
+            batch.append(padded_example)
+
+        return torch.cat(batch, 0)
+
     def create_padded_tensor(self, example, index):
         start_idx = index
         end_idx = index + self.sequence_size

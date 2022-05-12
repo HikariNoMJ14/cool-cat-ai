@@ -19,7 +19,6 @@ class MelodyDataset:
     def __init__(self,
                  encoding_type,
                  polyphonic,
-                 sequence_size,
                  chord_encoding_type,
                  chord_extension_count,
                  duration_correction,
@@ -33,7 +32,6 @@ class MelodyDataset:
 
         self.encoding_type = encoding_type
         self.polyphonic = polyphonic
-        self.sequence_size = sequence_size
         self.transpose_mode = transpose_mode
         self.chord_encoding_type = chord_encoding_type
         self.chord_extension_count = chord_extension_count
@@ -56,8 +54,7 @@ class MelodyDataset:
             self.encoding_type,
             'poly' if self.polyphonic else 'mono'
         )
-        self.name = f'sequence_{self.sequence_size}_' \
-                    f'transpose_{self.transpose_mode}_' \
+        self.name = f'transpose_{self.transpose_mode}_' \
                     f'chord_{self.chord_encoding_type}_{self.chord_extension_count}'
 
         self.improvised_filepaths = get_filepaths('improvised')
