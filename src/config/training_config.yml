@@ -1,5 +1,5 @@
 mlflow:
-  experiment_name: none
+  experiment_name: mono_duration_encoding
   run_name: default_run
 
 dataset:
@@ -8,8 +8,8 @@ dataset:
   chord_encoding_type: extended
   chord_extension_count: 7
   duration_correction: 0
-  transpose_mode: none
-  sequence_size: 100
+  transpose_mode: all
+  sequence_size: 21
 
 model:
   start_symbol: 129
@@ -18,7 +18,7 @@ model:
   offset_size: 48
   pitch_size: 131
   attack_size: 1
-  duration_size: 150 # TODO set to sensible value
+  duration_size: 450 # TODO set to sensible value
   metadata_size: 0
 
   embedding_size: 256

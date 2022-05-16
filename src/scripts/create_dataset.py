@@ -18,7 +18,7 @@ if __name__ == "__main__":
         chord_encoding_type='extended',
         chord_extension_count=7,
         duration_correction=0,
-        transpose_mode='none',
+        transpose_mode='all',
         logger=logger
     )
 

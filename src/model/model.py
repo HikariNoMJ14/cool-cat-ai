@@ -17,7 +17,6 @@ src_path = os.path.join(dir_path, '..', '..')
 
 
 class Model(nn.Module):
-
     VOLATILE = False
     LOG_INTERVAL = 500
 

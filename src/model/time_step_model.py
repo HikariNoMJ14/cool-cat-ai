@@ -240,7 +240,7 @@ class TimeStepModel(Model):
 
         assert batch[:, middle_tick:middle_tick + 1, 1].eq(self.start_symbol).count_nonzero() == 0
         assert batch[:, middle_tick:middle_tick + 1, 1].eq(self.end_symbol).count_nonzero() == 0
-        assert batch[:, middle_tick, 1].eq(self.end_symbol).count_nonzero() == 0
+        assert batch[:, :middle_tick, 1].eq(self.end_symbol).count_nonzero() == 0
         assert batch[:, middle_tick + 1:, 1].eq(self.start_symbol).count_nonzero() == 0
 
         past_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
