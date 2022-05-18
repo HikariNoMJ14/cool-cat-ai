@@ -1,17 +1,11 @@
 import os
-import pandas as pd
-import sys
 import json
-import time
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 from torch.autograd import Variable
 
-from src.melody import TimeStepMelody
-from src.utils import get_chord_progressions, get_original_filepath
-from src.utils.constants import TICKS_PER_MEASURE, REST_SYMBOL
+from src.utils.constants import REST_SYMBOL
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
@@ -25,12 +19,11 @@ class MelodyGenerator:
 
         self.model = model
         self.sequence_size = model.sequence_size
-        self.start_symbol = model.start_symbol
-        self.end_symbol = model.end_symbol
+        self.start_pitch_symbol = model.start_pitch_symbol
+        self.end_pitch_symbol = model.end_pitch_symbol
         self.temperature = temperature
 
         self.generated_improvised_pitches = np.array([])
-        self.generated_improvised_attacks = np.array([])
 
         self.logger = logger
 
@@ -40,49 +33,6 @@ class MelodyGenerator:
         self.context = None
         self.melody = None
 
-    def setup_context(self, melody_name, transpose_interval=0):
-        chord_progressions = get_chord_progressions(src_path)
-        original_filepath = get_original_filepath(melody_name)
-
-        if melody_name not in chord_progressions:
-            self.logger.error(f'Chord progression for {melody_name} not found')
-            exit(1)
-
-        chord_progression = chord_progressions[melody_name]
-
-        # TODO generalize logic - also appears on time step melody
-        self.melody = TimeStepMelody(None, polyphonic=False)
-        self.melody.song_name = melody_name
-        self.melody.set_song_structure(chord_progression)
-        self.melody.encode(None, original_filepath)
-
-        offsets = torch.from_numpy(
-            np.array([self.melody.encoded['offset']])
-        ).long().clone()
-
-        original_pitches = torch.from_numpy(
-            np.array([(self.melody.encoded['original_pitch'] + transpose_interval).fillna(REST_SYMBOL)])
-        ).long().clone()
-
-        original_attacks = torch.from_numpy(
-            np.array([self.melody.encoded['original_attack']])
-        ).long().clone()
-
-        chord_pitches = torch.from_numpy(
-            np.stack(
-                self.melody.encoded['chord_name'].apply(
-                    lambda x: np.array(self.chord_mapping[x]) + transpose_interval
-                )
-            )
-        ).long().clone().transpose(0, 1)
-
-        self.context = torch.cat([
-            offsets,
-            original_pitches,
-            original_attacks,
-            chord_pitches
-        ], 0).transpose(0, 1)
-
     # TODO duplicate - also in model
     def reverse_tensor(self, tensor, dim):
         idx = [i for i in range(tensor.size(dim) - 1, -1, -1)]
@@ -91,95 +41,6 @@ class MelodyGenerator:
 
         return tensor
 
-    # TODO duplicate - similar to create_padded_tensor in model
-    def get_context(self, tick):
-        start_tick = tick
-        end_tick = tick + self.sequence_size
-        length = self.context.size(0)
-        middle_tick = self.sequence_size // 2
-
-        common_sliced_data = self.context[np.arange(start_tick, end_tick) % length]
-
-        offsets = common_sliced_data[None, :, 0].cuda()
-        original_pitches = common_sliced_data[None, :, 1].cuda()
-        original_attacks = common_sliced_data[None, :, 2].cuda()
-
-        chord_pitches = torch.from_numpy(
-            np.stack(
-                common_sliced_data[:, 3:10]
-            )
-        ).long().clone().transpose(0, 1).cuda()
-
-        padded_improvised_pitches = []
-        padded_improvised_attacks = []
-
-        if tick < middle_tick:
-            left_improvised_pitches = torch.from_numpy(
-                np.array([self.start_symbol])
-            ).long().clone().repeat(middle_tick - start_tick, 1).transpose(0, 1).cuda()
-
-            left_improvised_attacks = torch.from_numpy(
-                np.array([0])
-            ).long().clone().repeat(middle_tick - start_tick, 1).transpose(0, 1).cuda()
-
-            padded_improvised_pitches.append(left_improvised_pitches)
-            padded_improvised_attacks.append(left_improvised_attacks)
-
-        center_improvised_pitches = torch.from_numpy(
-            self.generated_improvised_pitches
-        ).long().clone()[None, :].cuda()
-        center_improvised_attacks = torch.from_numpy(
-            self.generated_improvised_attacks
-        ).long().clone()[None, :].cuda()
-
-        padded_improvised_pitches.append(center_improvised_pitches)
-        padded_improvised_attacks.append(center_improvised_attacks)
-
-        if tick > middle_tick:
-            right_improvised_pitches = torch.from_numpy(
-                np.array([self.end_symbol])
-            ).long().clone().repeat(end_tick - middle_tick, 1).transpose(0, 1).cuda()
-
-            right_improvised_attacks = torch.from_numpy(
-                np.array([0])
-            ).long().clone().repeat(end_tick - middle_tick, 1).transpose(0, 1).cuda()
-
-            padded_improvised_pitches.append(right_improvised_pitches)
-            padded_improvised_attacks.append(right_improvised_attacks)
-
-        improvised_pitches = torch.cat(padded_improvised_pitches, 1)
-        improvised_attacks = torch.cat(padded_improvised_attacks, 1)
-
-        past = torch.cat([
-            offsets[:, :middle_tick],
-            improvised_pitches[:, :middle_tick],
-            improvised_attacks[:, :middle_tick],
-            original_pitches[:, :middle_tick],
-            original_attacks[:, :middle_tick],
-            chord_pitches[:, :middle_tick]
-        ], 0).transpose(0, 1)[None, :, :].cuda()
-
-        present = torch.cat([
-            offsets[:, middle_tick:middle_tick + 1],
-            original_pitches[:, middle_tick:middle_tick + 1],
-            original_attacks[:, middle_tick:middle_tick + 1],
-            chord_pitches[:, middle_tick:middle_tick + 1]
-        ], 0).transpose(0, 1)[None, :, :].cuda()
-
-        future = torch.cat([
-            offsets[:, middle_tick + 1:],
-            original_pitches[:, middle_tick + 1:],
-            original_attacks[:, middle_tick + 1:],
-            chord_pitches[:, middle_tick + 1:]
-        ], 0).transpose(0, 1)[None, :, :].cuda()
-        future = self.reverse_tensor(future, dim=0)
-
-        assert past.eq(self.end_symbol).count_nonzero() == 0
-        assert present.eq(self.start_symbol).count_nonzero() == 0 and present.eq(self.end_symbol).count_nonzero() == 0
-        assert future.eq(self.start_symbol).count_nonzero() == 0
-
-        return past, present, future
-
     def seed_generation(self):
         pass
 
@@ -187,111 +48,9 @@ class MelodyGenerator:
         self.setup_context(melody_name)
         self.seed_generation()
 
-        with torch.no_grad():
-            for measure in range(n_measures):
-                for offset in range(TICKS_PER_MEASURE):
-                    tick = measure * TICKS_PER_MEASURE + offset
-                    generated_pitch, generate_attack = self.generate_note(tick)
-
-                    self.generated_improvised_pitches = np.append(self.generated_improvised_pitches,
-                                                                  generated_pitch.item())
-                    self.generated_improvised_attacks = np.append(self.generated_improvised_attacks,
-                                                                  generate_attack.item())
-
-    def generate_note(self, tick):
-        past, present, future = self.get_context(tick)
-
-        output_pitch, output_attack = self.model(past, present, future)
-
-        output_pitch = output_pitch.squeeze()
-        output_attack = output_attack.squeeze()
-
-        pitch_probs = F.softmax(output_pitch / self.temperature, -1)
-        attack_probs = torch.sigmoid(output_attack)
-
-        stochastic_search = True
-        top_p = True
-        p = 0.9
-
-        if stochastic_search:
-            _, max_inds_pitch = torch.max(pitch_probs, 0)
-
-            new_pitch = max_inds_pitch.unsqueeze(0)
-            new_attack = attack_probs.round().unsqueeze(0)
-        elif top_p:
-            topp_p = self.mask_non_top_p(p, pitch_probs)
-
-            new_pitch = torch.distributions.categorical.Categorical(probs=topp_p).sample().unsqueeze(-1)
-        else:
-            new_pitch = torch.multinomial(pitch_probs, 1)
-
-        # if enforce_pitch is not None:
-        #     new_pitch = enforce_pitch.expand(self.batch_size, 1)
-        # if enforce_attack is not None:
-        #     new_att_net = torch.tensor(enforce_attack, dtype=torch.long, device=self.device).expand(self.batch_size,
-
-        self.logger.info([new_pitch.item(), new_attack.item()])
-
-        assert 0 <= new_pitch <= 128
-        assert new_attack == 0 or new_attack == 1
-
-        if new_pitch == 128 and new_attack == 1:
-            self.logger.error('Attack on rest!!!')
-            new_attack = torch.Tensor([0])  # TODO remove - not ok
-
-        return new_pitch, new_attack
-
-    def save(self):
-        self.melody.encoded['improvised_pitch'] = pd.Series(data=self.generated_improvised_pitches).replace(REST_SYMBOL,
-                                                                                                            np.nan)
-        self.melody.encoded['improvised_attack'] = pd.Series(data=self.generated_improvised_attacks)
-
-        out_path = os.path.join(
-            src_path,
-            'data', 'generated',
-            self.model.name
-        )
-
-        if not os.path.exists(out_path):
-            os.makedirs(out_path)
-
-        filename = f'{time.strftime("%y_%m_%d_%H_%M_%S")} {self.melody.song_name}.mid'
-        self.melody.to_midi(os.path.join(out_path, filename))
-
     def mask_non_top_p(self, p, probs):
         masked_probs = []
 
         return masked_probs
 
 
-if __name__ == "__main__":
-    import logging
-
-    logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
-    logFormatter = logging.Formatter('%(levelname)7s - %(message)s')
-
-    consoleHandler = logging.StreamHandler(sys.stdout)
-    consoleHandler.setFormatter(logFormatter)
-    logger.addHandler(consoleHandler)
-
-    # TODO improve?
-    model_path = os.path.join(
-        src_path,
-        'mlruns', '0',
-        'b9341ca224fa47feb2064ea061e4b7fe', 'artifacts',
-        'sequence_193_transpose_none_chord_extended_7_batchsize_64_seed_1234567890_best_val.pt'
-    )
-
-    model = torch.load(open(model_path, 'rb'))
-
-    temperature = .95
-
-    generator = MelodyGenerator(
-        model,
-        temperature,
-        logger
-    )
-
-    generator.generate_melody('A Felicidade', 32)
-    generator.save()

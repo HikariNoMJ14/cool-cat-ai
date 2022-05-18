@@ -48,13 +48,14 @@ if __name__ == "__main__":
     sequence_size = int(dataset_config['sequence_size'])
 
     model_config = config['model']
-    start_symbol = int(model_config['start_symbol'])
-    end_symbol = int(model_config['end_symbol'])
+    start_pitch_symbol = int(model_config['start_pitch_symbol'])
+    end_pitch_symbol = int(model_config['end_pitch_symbol'])
+    start_duration_symbol = int(model_config['start_duration_symbol'])
+    end_duration_symbol = int(model_config['end_duration_symbol'])
 
     offset_size = int(model_config['offset_size'])
     pitch_size = int(model_config['pitch_size'])
     attack_size = int(model_config['attack_size'])
-    duration_size = int(model_config['duration_size'])
     metadata_size = int(model_config['metadata_size'])
 
     embedding_size = int(model_config['embedding_size'])
@@ -103,12 +104,13 @@ if __name__ == "__main__":
     mlflow.log_param('transpose_mode', transpose_mode)
     mlflow.log_param('sequence_size', sequence_size)
 
-    mlflow.log_param('start_symbol', start_symbol)
-    mlflow.log_param('end_symbol', end_symbol)
+    mlflow.log_param('start_pitch_symbol', start_pitch_symbol)
+    mlflow.log_param('end_pitch_symbol', end_pitch_symbol)
+    mlflow.log_param('start_duration_symbol', start_duration_symbol)
+    mlflow.log_param('end_duration_symbol', end_duration_symbol)
     mlflow.log_param('offset_size', offset_size)
     mlflow.log_param('pitch_size', pitch_size)
     mlflow.log_param('attack_size', attack_size)
-    mlflow.log_param('duration_size', duration_size)
     mlflow.log_param('metadata_size', metadata_size)
     mlflow.log_param('embedding_size', embedding_size)
     mlflow.log_param('embedding_dropout_rate', embedding_dropout_rate)
@@ -158,12 +160,13 @@ if __name__ == "__main__":
         logger=logger,
         save_path=run.info.artifact_uri,
         sequence_size=sequence_size,
-        start_symbol=start_symbol,
-        end_symbol=end_symbol,
+        start_pitch_symbol=start_pitch_symbol,
+        end_pitch_symbol=end_pitch_symbol,
+        start_duration_symbol=start_duration_symbol,
+        end_duration_symbol=end_duration_symbol,
         offset_size=offset_size,
         pitch_size=pitch_size,
         attack_size=attack_size,
-        duration_size=duration_size,
         metadata_size=metadata_size,
         embedding_size=embedding_size,
         embedding_dropout_rate=embedding_dropout_rate,

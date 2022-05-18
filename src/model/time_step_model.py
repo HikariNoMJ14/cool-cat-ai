@@ -55,13 +55,14 @@ class TimeStepModel(Model):
         super(TimeStepModel, self).__init__(dataset, logger, save_path, **kwargs)
 
         # Set model parameters
+        self.start_attack_symbol = kwargs['start_attack_symbol']
+        self.end_attack_symbol = kwargs['end_attack_symbol']
+
         self.attack_size = kwargs['attack_size']
 
         self.attack_loss_weight = kwargs['attack_loss_weight']
 
         self.attack_loss_function = nn.BCEWithLogitsLoss()
-
-        # TODO add padding_idx for 128 (rest)? what about START_SYMBOL and END_SYMBOL?
 
         #  offset +
         #  improvised_pitch + improvised_attack +
@@ -238,10 +239,10 @@ class TimeStepModel(Model):
         batch_size, sequence_size, _ = batch.size()
         middle_tick = sequence_size // 2
 
-        assert batch[:, middle_tick:middle_tick + 1, 1].eq(self.start_symbol).count_nonzero() == 0
-        assert batch[:, middle_tick:middle_tick + 1, 1].eq(self.end_symbol).count_nonzero() == 0
-        assert batch[:, :middle_tick, 1].eq(self.end_symbol).count_nonzero() == 0
-        assert batch[:, middle_tick + 1:, 1].eq(self.start_symbol).count_nonzero() == 0
+        assert batch[:, middle_tick:middle_tick + 1, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
+        assert batch[:, middle_tick:middle_tick + 1, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
+        assert batch[:, :middle_tick, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
+        assert batch[:, middle_tick + 1:, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
 
         past_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
                                for feature in self.FEATURES['past']]
@@ -286,10 +287,12 @@ class TimeStepModel(Model):
         )
         label = label.view(batch_size, -1)
 
-        assert past.eq(self.end_symbol).count_nonzero() == 0
-        assert present.eq(self.start_symbol).count_nonzero() == 0 and present.eq(self.end_symbol).count_nonzero() == 0
-        assert future.eq(self.start_symbol).count_nonzero() == 0
-        assert label.eq(self.start_symbol).count_nonzero() == 0 and label.eq(self.end_symbol).count_nonzero() == 0
+        assert past.eq(self.end_pitch_symbol).count_nonzero() == 0
+        assert present.eq(self.start_pitch_symbol).count_nonzero() == 0 and \
+               present.eq(self.end_pitch_symbol).count_nonzero() == 0
+        assert future.eq(self.start_pitch_symbol).count_nonzero() == 0
+        assert label.eq(self.start_pitch_symbol).count_nonzero() == 0 and \
+               label.eq(self.end_pitch_symbol).count_nonzero() == 0
 
         return (past, present, future), label
 
@@ -332,11 +335,11 @@ class TimeStepModel(Model):
         # Add left padding if necessary
         if start_idx < 0:
             left_improvised_pitches = torch.from_numpy(
-                np.array([self.start_symbol])
+                np.array([self.start_pitch_symbol])
             ).long().clone().repeat(-start_idx, 1).transpose(0, 1)
 
             left_improvised_attacks = torch.from_numpy(
-                np.array([0])
+                np.array([self.start_attack_symbol])
             ).long().clone().repeat(-start_idx, 1).transpose(0, 1)
 
             padded_improvised_pitches.append(left_improvised_pitches)
@@ -356,11 +359,11 @@ class TimeStepModel(Model):
         # Add right padding if necessary
         if end_idx > length:
             right_improvised_pitches = torch.from_numpy(
-                np.array([self.end_symbol])
+                np.array([self.end_pitch_symbol])
             ).long().clone().repeat(end_idx - length, 1).transpose(0, 1)
 
             right_improvised_attacks = torch.from_numpy(
-                np.array([0])
+                np.array([self.end_attack_symbol])
             ).long().clone().repeat(end_idx - length, 1).transpose(0, 1)
 
             padded_improvised_pitches.append(right_improvised_pitches)

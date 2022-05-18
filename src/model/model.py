@@ -34,8 +34,8 @@ class Model(nn.Module):
 
         self.logger.info(f'Using dataset: {dataset.name}')
 
-        self.start_symbol = kwargs['start_symbol']
-        self.end_symbol = kwargs['end_symbol']
+        self.start_pitch_symbol = kwargs['start_pitch_symbol']
+        self.end_pitch_symbol = kwargs['end_pitch_symbol']
 
         self.sequence_size = kwargs['sequence_size']
 

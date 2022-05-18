@@ -57,8 +57,15 @@ class DurationModel(Model):
     def __init__(self, dataset=None, logger=None, save_path=os.path.join(src_path, 'results'), **kwargs):
         super(DurationModel, self).__init__(dataset, logger, save_path, **kwargs)
 
+        self.duration_to_ids = {}
+        self.ids_to_durations = {}
+        self.duration_size = 0
+
         # Set model parameters
-        self.duration_size = kwargs['duration_size']
+        self.start_duration_symbol = kwargs['start_duration_symbol']
+        self.end_duration_symbol = kwargs['end_duration_symbol']
+
+        self.setup_duration_mapping()
 
         self.duration_loss_weight = kwargs['duration_loss_weight']
 
@@ -68,7 +75,7 @@ class DurationModel(Model):
             nn.Embedding(self.duration_size, self.embedding_size, scale_grad_by_freq=True),
             nn.Dropout(self.embedding_dropout_rate)
         )
-        # TODO add padding_idx for 128 (rest)? what about START_SYMBOL and END_SYMBOL?
+        # TODO add padding_idx for START_SYMBOL and END_SYMBOL?
 
         #  offset +
         #  pitch + duration +
@@ -153,11 +160,36 @@ class DurationModel(Model):
         # Tie duration encoder and decoder weights
         self.duration_decoder.weight = self.duration_encoder[0].weight
 
+    def setup_duration_mapping(self):
+        all_durations = set({})
+
+        for example in self.dataset.dataset:
+            all_durations.update(set(example[:, self.TENSOR_IDX_MAPPING['duration']].tolist()))
+
+        # Create dict to map duration values to ids
+        self.duration_to_ids = dict((v, k) for k, v in enumerate(all_durations))
+
+        # Add mapping for padding symbols
+        self.duration_to_ids[self.start_duration_symbol] = len(all_durations)
+        self.duration_to_ids[self.end_duration_symbol] = len(all_durations) + 1
+
+        # Create inverse dict to map ids to durations
+        self.ids_to_durations = dict((k, v) for k, v in enumerate(all_durations))
+
+        self.duration_size = len(self.duration_to_ids.keys())
+
+    def convert_durations_to_ids(self, durations):
+        return durations.cpu().apply_(lambda x: self.duration_to_ids[x]).cuda()
+
+    def convert_ids_to_durations(self, ids):
+        return ids.cpu().apply_(lambda x: self.ids_to_durations[x]).cuda()
+
     def prepare_past_lstm_input(self, past):
         # Extract features from past tensor
         past_offsets = self.extract_features(past, 'offset', self.TENSOR_IDX_MAPPING['offset'] - 2)  # TODO fix
         past_pitches = self.extract_features(past, 'pitch', self.TENSOR_IDX_MAPPING['pitch'] - 2)
         past_durations = self.extract_features(past, 'duration', self.TENSOR_IDX_MAPPING['duration'] - 2)
+        past_durations = self.convert_durations_to_ids(past_durations)
         past_chord_pitches = self.extract_chords(past, (
             self.TENSOR_IDX_MAPPING['chord_pitches_start'] - 2,
             self.TENSOR_IDX_MAPPING['chord_pitches_start'] + self.chord_extension_count - 2
@@ -183,10 +215,7 @@ class DurationModel(Model):
     def prepare_present_nn_input(self, present):
         # Extract features from present tensor
         present_offsets = self.extract_features(present, 'offset', self.TENSOR_IDX_MAPPING['offset'] - 2)  # TODO fix
-        present_chord_pitches = self.extract_chords(present, (
-            self.TENSOR_IDX_MAPPING['chord_pitches_start'] - 2,
-            self.TENSOR_IDX_MAPPING['chord_pitches_start'] + self.chord_extension_count - 2
-        ))
+        present_chord_pitches = self.extract_chords(present, (1, 8))
 
         # Encode present offsets and pitches
         present_offset_embedding = self.offset_encoder(present_offsets)
@@ -203,6 +232,7 @@ class DurationModel(Model):
         future_offsets = self.extract_features(future, 'offset', self.TENSOR_IDX_MAPPING['offset'] - 2)  # TODO fix
         future_pitches = self.extract_features(future, 'pitch', self.TENSOR_IDX_MAPPING['pitch'] - 2)
         future_durations = self.extract_features(future, 'duration', self.TENSOR_IDX_MAPPING['duration'] - 2)
+        future_durations = self.convert_durations_to_ids(future_durations)
         future_chord_pitches = self.extract_chords(future, (
             self.TENSOR_IDX_MAPPING['chord_pitches_start'] - 2,
             self.TENSOR_IDX_MAPPING['chord_pitches_start'] + self.chord_extension_count - 2
@@ -282,10 +312,10 @@ class DurationModel(Model):
         batch_size, sequence_size, _ = improvised_batch.size()
         middle_tick = sequence_size // 2
 
-        assert improvised_batch[:, middle_tick:middle_tick + 1, 1].eq(self.start_symbol).count_nonzero() == 0
-        assert improvised_batch[:, middle_tick:middle_tick + 1, 1].eq(self.end_symbol).count_nonzero() == 0
-        assert improvised_batch[:, :middle_tick, 1].eq(self.end_symbol).count_nonzero() == 0
-        assert improvised_batch[:, middle_tick + 1:, 1].eq(self.start_symbol).count_nonzero() == 0
+        assert improvised_batch[:, middle_tick:middle_tick + 1, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
+        assert improvised_batch[:, middle_tick:middle_tick + 1, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
+        assert improvised_batch[:, :middle_tick, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
+        assert improvised_batch[:, middle_tick + 1:, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
 
         past_improvised_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
                                           for feature in self.FEATURES['past_improvised']]
@@ -299,10 +329,10 @@ class DurationModel(Model):
 
         original_batch = batch[1]
 
-        assert original_batch[:, middle_tick:middle_tick + 1, 1].eq(self.start_symbol).count_nonzero() == 0
-        assert original_batch[:, middle_tick:middle_tick + 1, 1].eq(self.end_symbol).count_nonzero() == 0
-        assert original_batch[:, :middle_tick, 1].eq(self.end_symbol).count_nonzero() == 0
-        assert original_batch[:, middle_tick + 1:, 1].eq(self.start_symbol).count_nonzero() == 0
+        assert original_batch[:, middle_tick:middle_tick + 1, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
+        assert original_batch[:, middle_tick:middle_tick + 1, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
+        assert original_batch[:, :middle_tick, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
+        assert original_batch[:, middle_tick + 1:, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
 
         past_original_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
                                         for feature in self.FEATURES['past_original']]
@@ -318,7 +348,7 @@ class DurationModel(Model):
         present_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
                                   for feature in self.FEATURES['present']]
         present_tensor_indices += self.chord_tensor_idx
-        present_tensor_indices = range(10)  # TODO fix!!!
+        present_tensor_indices = [0] + list(range(3,10))  # TODO fix!!!
         present = self.mask_entry(
             original_batch[:, middle_tick:middle_tick + 1, :],
             present_tensor_indices,
@@ -351,13 +381,13 @@ class DurationModel(Model):
         )
         label = label.view(batch_size, -1)
 
-        assert past_improvised[:, :, 1].eq(self.end_symbol).count_nonzero() == 0
-        assert past_original[:, :, 1].eq(self.end_symbol).count_nonzero() == 0
-        assert present[:, :, 1].eq(self.start_symbol).count_nonzero() == 0 \
-               and present.eq(self.end_symbol).count_nonzero() == 0
-        assert future[:, :, 1].eq(self.start_symbol).count_nonzero() == 0
-        assert label[:, 0].eq(self.start_symbol).count_nonzero() == 0 \
-               and label[:, 0].eq(self.end_symbol).count_nonzero() == 0
+        assert past_improvised[:, :, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
+        assert past_original[:, :, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
+        assert present[:, :, 1].eq(self.start_pitch_symbol).count_nonzero() == 0 and \
+               present.eq(self.end_pitch_symbol).count_nonzero() == 0
+        assert future[:, :, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
+        assert label[:, 0].eq(self.start_pitch_symbol).count_nonzero() == 0 and \
+               label[:, 0].eq(self.end_pitch_symbol).count_nonzero() == 0
 
         return (past_improvised, past_original, present, future), label
 
@@ -384,7 +414,7 @@ class DurationModel(Model):
             improvised_padded_example = self.create_padded_tensor(improvised_chosen_example, improvised_random_idx)
             improvised_batch.append(improvised_padded_example)
 
-            # Filter to only original notes that are BEFORE
+            # Filter to only original notes
             original_mask = chosen_example[:, self.TENSOR_IDX_MAPPING['original_flag']] == 1
             original_chosen_example = chosen_example[original_mask]
 
@@ -430,20 +460,21 @@ class DurationModel(Model):
 
         if start_idx < 0:
             first_offset = int(center_padded_offsets[:, 0])
-            left_padded_offsets = torch.from_numpy(
-                np.array([np.arange(first_offset - start_idx - 1, first_offset - 1, -1) % TICKS_PER_MEASURE])
+            left_padded_offsets = torch.from_numpy(  # TODO check logic is correct
+                np.array([np.arange(first_offset - start_idx, first_offset, -1) % TICKS_PER_MEASURE])
             ).long().clone()
 
             left_padded_pitches = torch.from_numpy(
-                np.array([self.start_symbol])
+                np.array([self.start_pitch_symbol])
             ).long().clone().repeat(-start_idx, 1).transpose(0, 1)
 
             left_padded_durations = torch.from_numpy(
-                np.array([0])  # TODO use padding symbol
+                np.array([self.start_duration_symbol])
             ).long().clone().repeat(-start_idx, 1).transpose(0, 1)
 
+            # TODO use chord for corresponding offset?
             left_padded_chord_pitches = torch.from_numpy(
-                np.array([self.start_symbol])
+                np.array([self.start_pitch_symbol])
             ).long().clone().repeat(-start_idx, self.chord_extension_count).transpose(0, 1)
 
             padded_offsets.append(left_padded_offsets)
@@ -458,21 +489,22 @@ class DurationModel(Model):
 
         # Add right padding if necessary
         if end_idx > length:
-            last_offset = int(center_padded_offsets[:, -1])
+            last_offset = int(center_padded_offsets[:, -1]) + int(center_padded_durations[:, -1])
             right_padded_offsets = torch.from_numpy(
-                np.array([np.arange(last_offset + 1, last_offset + end_idx - length + 1, 1) % TICKS_PER_MEASURE])
+                np.array([np.arange(last_offset, last_offset + end_idx - length, 1) % TICKS_PER_MEASURE])
             ).long().clone()
 
             right_padding_pitches = torch.from_numpy(
-                np.array([self.end_symbol])
+                np.array([self.end_pitch_symbol])
             ).long().clone().repeat(end_idx - length, 1).transpose(0, 1)
 
             right_padded_durations = torch.from_numpy(
-                np.array([0])
+                np.array([self.end_duration_symbol])
             ).long().clone().repeat(end_idx - length, 1).transpose(0, 1)
 
+            # TODO use chord for corresponding offset?
             right_padded_chord_pitches = torch.from_numpy(
-                np.array(self.end_symbol)
+                np.array(self.end_pitch_symbol)
             ).long().clone().repeat(end_idx - length, self.chord_extension_count).transpose(0, 1)
 
             padded_offsets.append(right_padded_offsets)
@@ -503,7 +535,7 @@ class DurationModel(Model):
         output_pitch = prediction[0]
         output_duration = prediction[1]
         pitch_loss = self.pitch_loss_function(output_pitch, label[:, 0])
-        duration_loss = self.duration_loss_function(output_duration, label[:, 1])
+        duration_loss = self.duration_loss_function(output_duration, self.convert_durations_to_ids(label[:, 1]))
 
         pitch_top1, \
         pitch_top3, \
