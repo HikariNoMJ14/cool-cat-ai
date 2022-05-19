@@ -166,12 +166,11 @@ class DurationModel(Model):
         for example in self.dataset.dataset:
             all_durations.update(set(example[:, self.TENSOR_IDX_MAPPING['duration']].tolist()))
 
+        all_durations.add(self.start_duration_symbol)
+        all_durations.add(self.end_duration_symbol)
+
         # Create dict to map duration values to ids
         self.duration_to_ids = dict((v, k) for k, v in enumerate(all_durations))
-
-        # Add mapping for padding symbols
-        self.duration_to_ids[self.start_duration_symbol] = len(all_durations)
-        self.duration_to_ids[self.end_duration_symbol] = len(all_durations) + 1
 
         # Create inverse dict to map ids to durations
         self.ids_to_durations = dict((k, v) for k, v in enumerate(all_durations))
@@ -314,8 +313,10 @@ class DurationModel(Model):
 
         assert improvised_batch[:, middle_tick:middle_tick + 1, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
         assert improvised_batch[:, middle_tick:middle_tick + 1, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
-        assert improvised_batch[:, :middle_tick, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
-        assert improvised_batch[:, middle_tick + 1:, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
+
+        if self.start_pitch_symbol != self.start_pitch_symbol:
+            assert improvised_batch[:, :middle_tick, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
+            assert improvised_batch[:, middle_tick + 1:, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
 
         past_improvised_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
                                           for feature in self.FEATURES['past_improvised']]
@@ -331,8 +332,10 @@ class DurationModel(Model):
 
         assert original_batch[:, middle_tick:middle_tick + 1, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
         assert original_batch[:, middle_tick:middle_tick + 1, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
-        assert original_batch[:, :middle_tick, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
-        assert original_batch[:, middle_tick + 1:, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
+
+        if self.start_pitch_symbol != self.start_pitch_symbol:
+            assert original_batch[:, :middle_tick, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
+            assert original_batch[:, middle_tick + 1:, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
 
         past_original_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
                                         for feature in self.FEATURES['past_original']]
@@ -381,13 +384,15 @@ class DurationModel(Model):
         )
         label = label.view(batch_size, -1)
 
-        assert past_improvised[:, :, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
-        assert past_original[:, :, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
         assert present[:, :, 1].eq(self.start_pitch_symbol).count_nonzero() == 0 and \
                present.eq(self.end_pitch_symbol).count_nonzero() == 0
-        assert future[:, :, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
         assert label[:, 0].eq(self.start_pitch_symbol).count_nonzero() == 0 and \
                label[:, 0].eq(self.end_pitch_symbol).count_nonzero() == 0
+
+        if self.start_pitch_symbol != self.start_pitch_symbol:
+            assert past_improvised[:, :, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
+            assert past_original[:, :, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
+            assert future[:, :, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
 
         return (past_improvised, past_original, present, future), label
 

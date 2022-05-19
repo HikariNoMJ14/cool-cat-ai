@@ -283,8 +283,6 @@ class DurationMelody(Melody):
 
         multiplier = (out_bpm / 60) / (self.FINAL_TICKS_PER_BEAT * self.chord_progression_time_signature[0])
 
-        self.encoded['ticks'] = self.encoded.index
-
         notes_df = self.encoded[~np.isnan(self.encoded['improvised_pitch'])]
         notes_df.reset_index(inplace=True)
 

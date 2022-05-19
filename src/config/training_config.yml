@@ -3,7 +3,7 @@ mlflow:
 #  experiment_name: none
 
 #  run_name: default
-  run_name: bigger sequence size
+  run_name: same start/end symbol
 
 dataset:
   encoding_type: duration
@@ -16,14 +16,14 @@ dataset:
 
 model:
   start_pitch_symbol: 129
-  end_pitch_symbol: 130
+  end_pitch_symbol: 129
   start_attack_symbol: -2
   end_attack_symbol: -1
-  start_duration_symbol: -2
-  end_duration_symbol: -1
+  start_duration_symbol: 0
+  end_duration_symbol: 0
 
   offset_size: 48
-  pitch_size: 131
+  pitch_size: 130
   attack_size: 1
   metadata_size: 0
 

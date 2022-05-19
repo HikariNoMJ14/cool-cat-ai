@@ -184,21 +184,17 @@ class Model(nn.Module):
                 )
                 self.logger.info(
                     f'Train loss {train_loss:5.2f} '
-                    f'Train ppl {np.exp(train_loss):8.2f} '
                     f'| {training_str}'
                 )
                 self.logger.info(
                     f'Valid loss {valid_loss:5.2f} '
-                    f'Valid ppl {np.exp(valid_loss):8.2f} '
                     f'| {validation_str}'
                 )
 
                 epoch_results = dict({
                     'epoch': epoch,
                     'train_loss': train_loss,
-                    'train_ppl': np.exp(train_loss),
-                    'valid_loss': valid_loss,
-                    'valid_ppl': np.exp(valid_loss)
+                    'valid_loss': valid_loss
                 })
                 for name, value in train_metrics.items():
                     epoch_results['train_' + name] = value
@@ -260,7 +256,6 @@ class Model(nn.Module):
         metrics = {k: Metric() for k in self.METRICS_LIST}
         logging_loss = Metric()
         logging_metrics = {k: Metric() for k in self.METRICS_LIST}
-        start_time = time.time()
 
         if num_batches is None:
             num_batches = self.get_num_batches(dataset, batch_size)
@@ -291,12 +286,10 @@ class Model(nn.Module):
             if phase == 'train':
                 if i % self.LOG_INTERVAL == 0 and i > 0:
                     cur_loss = logging_loss.avg
-                    elapsed = time.time() - start_time
                     metric_str = ' | '.join([f'{k}: {v.avg:5.2f}' for k, v in logging_metrics.items()])
 
                     self.logger.info(
                         f'| {int(100 * i / num_batches):3d}% '
-                        # f'| ms/batch {(elapsed * 1000 / self.LOG_INTERVAL):7.2f} '
                         f'| loss {cur_loss:5.2f} '
                         f'| ppl {np.exp(cur_loss):6.2f} '
                         f'| grad_norm {grad_norm:5.2f} '
@@ -306,7 +299,6 @@ class Model(nn.Module):
                     logging_loss.reset()
                     for name in metrics.keys():
                         logging_metrics[name].reset()
-                    start_time = time.time()
 
         avg_loss = loss.avg
         avg_metrics = {}

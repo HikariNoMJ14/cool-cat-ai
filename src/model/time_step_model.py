@@ -49,7 +49,7 @@ class TimeStepModel(Model):
         'attack_top1'
     ]
 
-    PLOTTED_METRICS = ['loss', 'ppl', 'pitch_loss', 'attack_loss']
+    PLOTTED_METRICS = ['loss', 'pitch_loss', 'attack_loss']
 
     def __init__(self, dataset=None, logger=None, save_path=os.path.join(src_path, 'results'), **kwargs):
         super(TimeStepModel, self).__init__(dataset, logger, save_path, **kwargs)
