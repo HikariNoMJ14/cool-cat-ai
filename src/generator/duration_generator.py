@@ -101,10 +101,15 @@ class DurationGenerator(MelodyGenerator):
 
         # TODO duplicate - similar to create_padded_tensor in model
 
-    def get_context(self, tick):
-        middle_tick = self.sequence_size // 2
-        start_tick = tick - middle_tick
-        length = self.context.size(0)
+    def get_improvised_context(self, tick):
+        middle_idx = self.sequence_size // 2
+        length = len(self.generated_improvised_pitches)
+
+        start_idx = length - middle_idx
+        end_idx = length + middle_idx + 1
+
+        slice_start = start_idx if start_idx > 0 else 0
+        slice_end = end_idx if end_idx < length else length
 
         padded_improvised_offsets = []
         padded_improvised_pitches = []
@@ -113,13 +118,13 @@ class DurationGenerator(MelodyGenerator):
 
         if len(self.generated_improvised_pitches) > 0:
             center_improvised_offsets = torch.from_numpy(
-                self.generated_improvised_offsets
+                self.generated_improvised_offsets[slice_start:slice_end]
             ).long().clone()[None, :].cuda()
             center_improvised_pitches = torch.from_numpy(
-                self.generated_improvised_pitches
+                self.generated_improvised_pitches[slice_start:slice_end]
             ).long().clone()[None, :].cuda()
             center_improvised_durations = torch.from_numpy(
-                self.generated_improvised_durations
+                self.generated_improvised_durations[slice_start:slice_end]
             ).long().clone()[None, :].cuda()
             center_improvised_chord_pitches = torch.from_numpy(
                 np.stack([
@@ -128,39 +133,40 @@ class DurationGenerator(MelodyGenerator):
                             self.melody.flat_chord_progression[
                                 int(np.floor(tick * self.melody.chord_progression_time_signature[0])) %
                                 len(self.melody.flat_chord_progression)
-                            ]
+                                ]
                         ])
-                    for tick in self.generated_improvised_ticks
+                    for tick in self.generated_improvised_ticks[slice_start:slice_end]
                 ])
             ).long().clone().transpose(0, 1).cuda()
 
-            padded_improvised_offsets.append(center_improvised_offsets)
-            padded_improvised_pitches.append(center_improvised_pitches)
-            padded_improvised_durations.append(center_improvised_durations)
-            padded_improvised_chord_pitches.append(center_improvised_chord_pitches)
-
-        if start_tick < 0:
+        if start_idx < 0:
             first_offset = int(center_improvised_offsets[:, 0]) if len(self.generated_improvised_offsets) > 0 else tick
             left_improvised_offsets = torch.from_numpy(
-                np.array([np.arange(first_offset + start_tick, first_offset, 1) % TICKS_PER_MEASURE])
+                np.array([np.arange(first_offset + start_idx, first_offset, 1) % TICKS_PER_MEASURE])
             ).long().clone().cuda()
 
             left_improvised_pitches = torch.from_numpy(
                 np.array([self.start_pitch_symbol])
-            ).long().clone().repeat(-start_tick, 1).transpose(0, 1).cuda()
+            ).long().clone().repeat(-start_idx, 1).transpose(0, 1).cuda()
 
             left_improvised_durations = torch.from_numpy(
                 np.array([self.start_duration_symbol])
-            ).long().clone().repeat(-start_tick, 1).transpose(0, 1).cuda()
+            ).long().clone().repeat(-start_idx, 1).transpose(0, 1).cuda()
 
             left_improvised_chord_pitches = torch.from_numpy(
                 np.array([self.start_pitch_symbol])
-            ).long().clone().repeat(-start_tick, self.model.chord_extension_count).transpose(0, 1).cuda()
+            ).long().clone().repeat(-start_idx, self.model.chord_extension_count).transpose(0, 1).cuda()
 
             padded_improvised_offsets.append(left_improvised_offsets)
             padded_improvised_pitches.append(left_improvised_pitches)
             padded_improvised_durations.append(left_improvised_durations)
             padded_improvised_chord_pitches.append(left_improvised_chord_pitches)
+
+        if len(self.generated_improvised_pitches) > 0:
+            padded_improvised_offsets.append(center_improvised_offsets)
+            padded_improvised_pitches.append(center_improvised_pitches)
+            padded_improvised_durations.append(center_improvised_durations)
+            padded_improvised_chord_pitches.append(center_improvised_chord_pitches)
 
         improvised_offsets = torch.cat(padded_improvised_offsets, 1)
         improvised_pitches = torch.cat(padded_improvised_pitches, 1)
@@ -168,11 +174,17 @@ class DurationGenerator(MelodyGenerator):
         improvised_chord_pitches = torch.cat(padded_improvised_chord_pitches, 1)
 
         past_improvised = torch.cat([
-            improvised_offsets[:, :middle_tick],
-            improvised_pitches[:, :middle_tick],
-            improvised_durations[:, :middle_tick],
-            improvised_chord_pitches[:, :middle_tick]
+            improvised_offsets[:, :middle_idx],
+            improvised_pitches[:, :middle_idx],
+            improvised_durations[:, :middle_idx],
+            improvised_chord_pitches[:, :middle_idx]
         ], 0).transpose(0, 1)[None, :, :].cuda()
+
+        return past_improvised
+
+    def get_original_context(self, tick):
+        middle_tick = self.sequence_size // 2
+        length = self.context.size(0)
 
         idx = torch.nonzero(self.context[:, 0] <= tick)[-1].item()
         start_idx = idx - middle_tick
@@ -276,6 +288,12 @@ class DurationGenerator(MelodyGenerator):
         ], 0).transpose(0, 1)[None, :, :].cuda()
         future = self.reverse_tensor(future, dim=0)
 
+        return past_original, present, future
+
+    def get_context(self, tick):
+        past_improvised = self.get_improvised_context(tick)
+        past_original, present, future = self.get_original_context(tick)
+
         assert past_improvised.eq(self.end_pitch_symbol).count_nonzero() == 0
         assert past_original.eq(self.end_pitch_symbol).count_nonzero() == 0
         assert present.eq(self.start_pitch_symbol).count_nonzero() == 0 and \
@@ -317,16 +335,19 @@ class DurationGenerator(MelodyGenerator):
 
         new_duration = self.model.convert_ids_to_durations(new_duration)
 
-        self.logger.info([new_pitch.item(), new_duration.item()])
-
         assert 0 <= new_pitch <= 128
         assert new_duration > 0
 
         return new_pitch, new_duration
 
     def save(self):
-        self.melody.encoded['improvised_pitch'] = pd.Series(data=self.generated_improvised_pitches).replace(REST_SYMBOL,                                                                                  np.nan)
-        self.melody.encoded['improvised_duration'] = pd.Series(data=self.generated_improvised_durations)
+        new_melody = pd.DataFrame()
+        new_melody['ticks'] = pd.Series(data=self.generated_improvised_ticks)
+        new_melody['offset'] = pd.Series(data=self.generated_improvised_offsets)
+        new_melody['improvised_pitch'] = pd.Series(data=self.generated_improvised_pitches).replace(REST_SYMBOL, np.nan)
+        new_melody['improvised_duration'] = pd.Series(data=self.generated_improvised_durations)
+
+        self.melody.encoded = new_melody
 
         out_path = os.path.join(
             src_path,

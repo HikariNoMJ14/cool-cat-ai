@@ -302,13 +302,16 @@ class DurationMelody(Melody):
         p.instruments.append(melody)
 
         start = 0
-        use_tonic = True
+        beat_n = 1
 
         for section in self.song_structure['sections']:
             for chord_name in self.song_structure['progression'][section]:
                 chord_notes = Chord(chord_name).getMIDI()
 
-                if use_tonic:
+                # Use the tonic on the first beat, the fifth on the third beat
+                # and the full chord (minus the fifth) on beats 2 and 4
+                # TODO only works with 4/4
+                if beat_n == 1:
                     note = pm.Note(
                         velocity=64,
                         pitch=int(chord_notes[0]),
@@ -321,18 +324,27 @@ class DurationMelody(Melody):
                     chord_annotation = pm.Lyric(chord_name, start)
 
                     p.lyrics.append(chord_annotation)
+                elif beat_n == 3:
+                    note = pm.Note(
+                        velocity=64,
+                        pitch=int(chord_notes[3]) - OCTAVE_SEMITONES * 2,
+                        start=start,
+                        end=start + 0.25,
+                    )
+                    chords.notes.append(note)
                 else:
-                    for chord_note in chord_notes[1:]:
-                        note = pm.Note(
-                            velocity=64,
-                            pitch=int(chord_note),
-                            start=start,
-                            end=start + 0.25,
-                        )
-                        chords.notes.append(note)
+                    for extension, chord_note in enumerate(chord_notes[1:]):
+                        if extension != 2:  # don't add the fifth
+                            note = pm.Note(
+                                velocity=64,
+                                pitch=int(chord_note),
+                                start=start,
+                                end=start + 0.25,
+                            )
+                            chords.notes.append(note)
 
                 start += 0.5
-                use_tonic = not use_tonic
+                beat_n = (beat_n + 1) % 4
 
         p.instruments.append(chords)
 

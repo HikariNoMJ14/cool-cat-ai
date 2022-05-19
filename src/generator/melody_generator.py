@@ -5,8 +5,6 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 
-from src.utils.constants import REST_SYMBOL
-
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
 
