@@ -17,8 +17,8 @@ src_path = os.path.join(dir_path, '..', '..')
 
 class DurationGenerator(MelodyGenerator):
 
-    def __init__(self, model, temperature, logger):
-        super(DurationGenerator, self).__init__(model, temperature, logger)
+    def __init__(self, model, temperature, sample, logger):
+        super(DurationGenerator, self).__init__(model, temperature, sample, logger)
 
         self.start_duration_symbol = model.start_duration_symbol
         self.end_duration_symbol = model.end_duration_symbol
@@ -313,25 +313,17 @@ class DurationGenerator(MelodyGenerator):
         pitch_probs = F.softmax(output_pitch / self.temperature, -1)
         duration_probs = torch.sigmoid(output_duration)
 
-        stochastic_search = True
-        top_p = True
-        p = 0.9
-
-        if stochastic_search:
-            _, max_inds_pitch = torch.max(pitch_probs, 0)
-            _, max_inds_duration = torch.max(duration_probs, 0)
-
-            new_pitch = max_inds_pitch.unsqueeze(0)
-            new_duration = max_inds_duration.unsqueeze(0)
-        elif top_p:
-            topp_p = self.mask_non_top_p(p, pitch_probs)
-            topp_d = self.mask_non_top_p(p, duration_probs)
-
-            new_pitch = torch.distributions.categorical.Categorical(probs=topp_p).sample().unsqueeze(-1)
-            new_duration = torch.distributions.categorical.Categorical(probs=topp_d).sample().unsqueeze(-1)
-        else:
+        if self.sample[0]:
             new_pitch = torch.multinomial(pitch_probs, 1)
+        else:
+            _, max_inds_pitch = torch.max(pitch_probs, 0)
+            new_pitch = max_inds_pitch.unsqueeze(0)
+
+        if self.sample[1]:
             new_duration = torch.multinomial(duration_probs, 1)
+        else:
+            _, max_inds_duration = torch.max(duration_probs, 0)
+            new_duration = max_inds_duration.unsqueeze(0)
 
         new_duration = self.model.convert_ids_to_durations(new_duration)
 

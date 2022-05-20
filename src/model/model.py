@@ -116,7 +116,7 @@ class Model(nn.Module):
         return torch.squeeze(chord_tensor).contiguous().view(tensor.size(0), tensor.size(1), -1)
 
     def train_and_eval(self, num_batches, batch_size, num_epochs, optimizer, scheduler, seed, callback):
-        self.name = f'{self.dataset.name}_batchsize_{batch_size}_seed_{seed}'
+        self.name = f'{time.strftime("%y_%m_%d_%H_%M_%S")}_{self.dataset.name}_batchsize_{batch_size}_seed_{seed}'
 
         checkpoint_path = os.path.join(self.save_path, self.name + '.pt')
         log_path = os.path.join(self.save_path, 'log.log')

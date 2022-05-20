@@ -29,11 +29,13 @@ if __name__ == "__main__":
 
     model = torch.load(open(model_path, 'rb'))
 
-    temperature = .99
+    temperature = .75
+    sample = (True, False)
 
     generator = DurationGenerator(
         model,
         temperature,
+        sample,
         logger
     )
 

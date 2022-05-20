@@ -13,13 +13,14 @@ chord_mapping_filepath = os.path.join(src_path, 'data', 'tensor_dataset', 'chord
 
 class MelodyGenerator:
 
-    def __init__(self, model, temperature, logger):
+    def __init__(self, model, temperature, sample, logger):
 
         self.model = model
         self.sequence_size = model.sequence_size
         self.start_pitch_symbol = model.start_pitch_symbol
         self.end_pitch_symbol = model.end_pitch_symbol
         self.temperature = temperature
+        self.sample = sample
 
         self.generated_improvised_pitches = np.array([])
 
@@ -45,10 +46,5 @@ class MelodyGenerator:
     def generate_melody(self, melody_name, n_measures):
         self.setup_context(melody_name)
         self.seed_generation()
-
-    def mask_non_top_p(self, p, probs):
-        masked_probs = []
-
-        return masked_probs
 
 

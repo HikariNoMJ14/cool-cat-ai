@@ -52,7 +52,7 @@ class DurationModel(Model):
         'duration_top1', 'duration_top3', 'duration_top5'
     ]
 
-    PLOTTED_METRICS = ['loss', 'ppl', 'pitch_loss', 'duration_loss']
+    PLOTTED_METRICS = ['loss', 'pitch_loss', 'duration_loss']
 
     def __init__(self, dataset=None, logger=None, save_path=os.path.join(src_path, 'results'), **kwargs):
         super(DurationModel, self).__init__(dataset, logger, save_path, **kwargs)
