@@ -71,8 +71,17 @@ class DurationModel(Model):
 
         self.duration_loss_function = nn.CrossEntropyLoss()
 
+        if kwargs['use_padding_idx'] and self.start_duration_symbol != self.end_duration_symbol:
+            self.logger.warning('Start duration symbol and end duration symbol are different, '
+                                'padding_idx will only act on start duration symbol')
+
         self.duration_encoder = nn.Sequential(
-            nn.Embedding(self.duration_size, self.embedding_size, scale_grad_by_freq=True),
+            nn.Embedding(
+                self.duration_size,
+                self.embedding_size,
+                scale_grad_by_freq=True,
+                padding_idx=self.start_duration_symbol if kwargs['use_padding_idx'] else None
+            ),
             nn.Dropout(self.embedding_dropout_rate)
         )
         # TODO add padding_idx for START_SYMBOL and END_SYMBOL?
@@ -351,7 +360,7 @@ class DurationModel(Model):
         present_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
                                   for feature in self.FEATURES['present']]
         present_tensor_indices += self.chord_tensor_idx
-        present_tensor_indices = [0] + list(range(3,10))  # TODO fix!!!
+        present_tensor_indices = [0] + list(range(3, 10))  # TODO fix!!!
         present = self.mask_entry(
             original_batch[:, middle_tick:middle_tick + 1, :],
             present_tensor_indices,

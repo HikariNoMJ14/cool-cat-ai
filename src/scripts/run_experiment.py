@@ -48,6 +48,7 @@ if __name__ == "__main__":
     sequence_size = int(dataset_config['sequence_size'])
 
     model_config = config['model']
+    use_padding_idx = bool(model_config['use_padding_idx'])
     start_pitch_symbol = int(model_config['start_pitch_symbol'])
     end_pitch_symbol = int(model_config['end_pitch_symbol'])
     start_duration_symbol = int(model_config['start_duration_symbol'])
@@ -104,6 +105,7 @@ if __name__ == "__main__":
     mlflow.log_param('transpose_mode', transpose_mode)
     mlflow.log_param('sequence_size', sequence_size)
 
+    mlflow.log_param('use_padding_idx', use_padding_idx)
     mlflow.log_param('start_pitch_symbol', start_pitch_symbol)
     mlflow.log_param('end_pitch_symbol', end_pitch_symbol)
     mlflow.log_param('start_duration_symbol', start_duration_symbol)
@@ -160,6 +162,7 @@ if __name__ == "__main__":
         logger=logger,
         save_path=run.info.artifact_uri,
         sequence_size=sequence_size,
+        use_padding_idx=use_padding_idx,
         start_pitch_symbol=start_pitch_symbol,
         end_pitch_symbol=end_pitch_symbol,
         start_duration_symbol=start_duration_symbol,

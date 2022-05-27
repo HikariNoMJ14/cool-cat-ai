@@ -304,6 +304,7 @@ class DurationMelody(Melody):
         start = 0
         beat_n = 1
 
+        # TODO Generalize for melodies longer than one cycle
         for section in self.song_structure['sections']:
             for chord_name in self.song_structure['progression'][section]:
                 chord_notes = Chord(chord_name).getMIDI()

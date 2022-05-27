@@ -1,7 +1,5 @@
-import os
-import ast
 import json
-from glob import glob
+import logging
 import random, itertools
 
 import scipy.stats
@@ -9,11 +7,12 @@ import numpy as np
 import pandas as pd
 
 import mingus.core.scales as scales
-import mingus.core
 import mingus.core.notes as notes
 
 from src.ezchord import Chord
 from src.utils.constants import TICKS_PER_MEASURE, REST_VAL, PITCH_CLS
+
+logger = logging.getLogger()
 
 
 def compute_histogram_entropy(histogram):
@@ -25,7 +24,7 @@ def get_pitch_histogram(melody, pitches=range(128), verbose=False):
 
     if not len(melody):
         if verbose:
-            print('The sequence contains no notes.')
+            logger.info('The sequence contains no notes.')
         return None
 
     n_pich_cls = len(PITCH_CLS)
@@ -55,7 +54,7 @@ def get_onset_xor_distance(sequence_a, sequence_b):
 
     dist = np.sum(np.abs(a_onsets - b_onsets)) / TICKS_PER_MEASURE
 
-    # print(a_onsets, b_onsets, np.sum(np.abs(a_onsets - b_onsets)))
+    # logger.info(a_onsets, b_onsets, np.sum(np.abs(a_onsets - b_onsets)))
 
     return dist
 
@@ -77,7 +76,8 @@ def compute_piece_pitch_entropy(melody, window_size, pitches=range(128), verbose
 
         if pitch_histogram is None:
             if verbose:
-                print('No notes in this crop: {}~{} measures.'.format(start_measure, start_measure + window_size - 1))
+                logger.info(
+                    'No notes in this crop: {}~{} measures.'.format(start_measure, start_measure + window_size - 1))
             continue
 
         pitch_entropies.append(compute_histogram_entropy(pitch_histogram))
@@ -335,20 +335,19 @@ def calculate_TS(melody, distance):
 def calculate_PV(melody, window_size):
     n_bars = melody['measure'].max() + 1
 
-    pitch_variations = []
+    pitch_variations = 0.0
     for start_measure in range(n_bars - window_size + 1):
         sequence = list(get_bars_crop(melody, start_measure, start_measure + window_size - 1)['pitch'] % 12)
 
-        # print(sequence)
+        # logger.info(sequence)
 
         if len(sequence) > 0:
             diff_pitches = set([])
             for pitch in sequence:
                 diff_pitches.add(pitch)
-            pitch_variations.append(float(len(diff_pitches)))
-    # print('----')
-    # print(pitch_variations)
-    # print('----')
+            pitch_variations += (float(len(diff_pitches)) / len(sequence))
+
+    print(np.mean(pitch_variations), pitch_variations / (n_bars - window_size + 1))
 
     return np.mean(pitch_variations) if len(pitch_variations) > 0 else 0.0
 
@@ -370,7 +369,7 @@ def calculate_RV(melody, window_size):
                 diff_durations.add(duration)
             rhythm_variation.append(float(len(diff_durations)))
 
-    # print(rhythm_variation)
+    # logger.info(rhythm_variation)
 
     return np.mean(rhythm_variation) if len(rhythm_variation) > 0 else 0.0
 
@@ -385,17 +384,17 @@ def calculate_RV(melody, window_size):
 # ing to a multiple of an eighth note.
 
 
-# def calculate_OR(melody, l):
-#     valid_count = 0.0
-#
-#     durations = melody['duration']
-#
-#     for dur in durations[:l]:
-#         if dur % 6 == 0:
-#             valid_count += 1
-#             break
-#
-#     return valid_count
+def calculate_OR(melody, l):
+    valid_count = 0.0
+
+    durations = melody['duration']
+
+    for dur in durations[:l]:
+        if dur % 6 == 0:
+            valid_count += 1
+            break
+
+    return valid_count
 
 
 # Rote Memorization frequencies (RM)
@@ -403,48 +402,48 @@ def calculate_RV(melody, window_size):
 # note sequences of length l from the corpus.
 
 
-# def calculate_RM(melody, ns, ds, length=3, doDurs=False):
-#     ltuples = {}
-#     matchlist = []
-#     total = 0.0
-#     matches = 0.0
-#
-#     pitches = melody['pitch']
-#     durations = melody['duration']
-#
-#     for i in range(len(ns)):
-#         n = ns[i]
-#         d = ds[i]
-#         if len(n) < length:
-#             continue
-#         for j in range(len(n) - length + 1):
-#             if doDurs:
-#                 seq = (tuple(n[j:j + length]), tuple(d[j:j + length]))
-#             else:
-#                 seq = tuple(n[j:j + length])
-#             ltuples[seq] = True
-#     for i in range(len(pitches)):
-#         n = pitches[i]
-#         d = durations[i]
-#         if len(n) < length:
-#             continue
-#         for j in range(len(n) - length + 1):
-#             if doDurs:
-#                 seq = (tuple(n[j:j + length]), tuple(d[j:j + length]))
-#             else:
-#                 seq = tuple(n[j:j + length])
-#             try:
-#                 result = ltuples[seq]
-#                 if seq not in matchlist:
-#                     matchlist.append(seq)
-#                 matches += 1
-#             except KeyError:
-#                 pass
-#             total += 1
-#
-#     print('Num types of matches:', len(matchlist))
-#
-#     return matches / total
+def calculate_RM(melody, ns, ds, length=3, doDurs=False):
+    ltuples = {}
+    matchlist = []
+    total = 0.0
+    matches = 0.0
+
+    pitches = melody['pitch']
+    durations = melody['duration']
+
+    for i in range(len(ns)):
+        n = ns[i]
+        d = ds[i]
+        if len(n) < length:
+            continue
+        for j in range(len(n) - length + 1):
+            if doDurs:
+                seq = (tuple(n[j:j + length]), tuple(d[j:j + length]))
+            else:
+                seq = tuple(n[j:j + length])
+            ltuples[seq] = True
+    for i in range(len(pitches)):
+        n = pitches[i]
+        d = durations[i]
+        if len(n) < length:
+            continue
+        for j in range(len(n) - length + 1):
+            if doDurs:
+                seq = (tuple(n[j:j + length]), tuple(d[j:j + length]))
+            else:
+                seq = tuple(n[j:j + length])
+            try:
+                result = ltuples[seq]
+                if seq not in matchlist:
+                    matchlist.append(seq)
+                matches += 1
+            except KeyError:
+                pass
+            total += 1
+
+    logger.info('Num types of matches:', len(matchlist))
+
+    return matches / total
 
 
 # Harmonic Consistency (HC)
@@ -505,7 +504,7 @@ def get_chord_affinity(chord_name):
     for idx, sn in enumerate(chord_notes):
         chord_notes[idx] = replace_enharmonic(sn)
 
-    # print("--- " + chord_name + " --- " + str(chord_notes))
+    # logger.info("--- " + chord_name + " --- " + str(chord_notes))
 
     chord_affinity = {}
 
@@ -515,7 +514,10 @@ def get_chord_affinity(chord_name):
         else:
             chord_affinity[pc] = 'NaN'
 
-    chord_root = replace_enharmonic(chord_obj.root)
+    chord_root = chord_obj.root
+
+    if chord_root == 'Gb':
+        chord_root = 'F#'
 
     if chord_obj.mode.name == 'MAJ':
         scale = scales.Major(chord_root)
@@ -530,7 +532,7 @@ def get_chord_affinity(chord_name):
     elif chord_obj.mode.name == 'SUS':
         scale = scales.Major(chord_root)
     else:
-        print('WEEE ' + chord_name + ' ' + chord_obj.mode.name)
+        logger.info('Unknown mode: ' + chord_name + ' - ' + chord_obj.mode.name)
 
     scale_notes = scale.ascending()
 
@@ -559,8 +561,8 @@ def get_chord_affinity(chord_name):
     if '#13' in chord_name:
         scale_notes[5] = notes.int_to_note((notes.note_to_int(scale_notes[5]) + 1) % 12)
 
-    # print(chord_obj.mode.name, scale_notes)
-    # print(chord_affinity)
+    # logger.info(chord_obj.mode.name, scale_notes)
+    # logger.info(chord_affinity)
 
     for idx, sn in enumerate(scale_notes):
         scale_notes[idx] = replace_enharmonic(sn)
@@ -581,7 +583,7 @@ def get_chord_affinity(chord_name):
         if chord_affinity[pc] == 'NaN':
             nant += 1
 
-    # print(chot, colt, nant)
+    # logger.info(chot, colt, nant)
 
     return chord_affinity
 
@@ -598,6 +600,7 @@ def calculate_HC(melody):
 
         cur_chord = chord_names[idx]
         pitch = replace_enharmonic(notes.int_to_note(pitch % 12))
+
         cur_chord_affinity = get_chord_affinity(cur_chord)
 
         if cur_chord_affinity[pitch] == 'ChT':
@@ -660,12 +663,12 @@ def get_sequences_onefile(allpath, MAX_SEQ_DUR_LENGTH):
     MIDI_MAX = 108
     MIDI_MIN = 36
     REST_VAL = MIDI_MAX - MIDI_MIN + 1
-    print(allpath)
+    logger.info(allpath)
     with open(allpath, 'r') as infile:
         data = json.load(infile)
     mt_list = data["transposed_seqs_skip"]
     ct_list = data["full_chords"]
-    # print(ct_list[5][0][0])
+    # logger.info(ct_list[5][0][0])
     all_seqs = []
     maxseqdur = 0
     for lindex in range(len(mt_list)):
@@ -735,10 +738,10 @@ def get_sequences_onefile(allpath, MAX_SEQ_DUR_LENGTH):
                     for pitch, beatpos, index in seq:
                         durs.append((beatpos - prevpos + 48 - 1) % 48 + 1)
                         prevpos = beatpos
-                    print(durs)
-                    print(sum(durs))
+                    logger.info(durs)
+                    logger.info(sum(durs))
 
-    print(maxseqdur)
+    logger.info(maxseqdur)
     all_seqs.sort(key=lambda x: len(x[0]), reverse=False)
     noteseqs = [x[0] for x in all_seqs]
     durseqs = [x[1] for x in all_seqs]
@@ -746,22 +749,25 @@ def get_sequences_onefile(allpath, MAX_SEQ_DUR_LENGTH):
     lows = [x[3] for x in all_seqs]
     highs = [x[4] for x in all_seqs]
     spseqs = [x[5] for x in all_seqs]
-    print("Number of sequences: ", len(noteseqs))
+    logger.info("Number of sequences: ", len(noteseqs))
     return noteseqs, durseqs, chordseqs, lows, highs, spseqs
 
 
 if __name__ == "__main__":
     filepaths = [
-        '../data/split_melody_data/Real Book/All Of Me_original.csv',
-        '../data/split_melody_data/Jazz-Midi/All Of Me_1.csv'
+        # '../data/split_melody_data/Real Book/All Of Me_original.csv',
+        # '../data/split_melody_data/Jazz-Midi/All Of Me_1.csv'
         # '../data/split_melody_data/Doug McKenzie/Alone Together_1.csv'
+        '../data/finalised/csv/Real Book/Falling Grace -o-.csv'
     ]
 
     df = pd.read_csv(filepaths[0], index_col=0)
-    df['chord_notes'] = df['chord_notes'].apply(ast.literal_eval)
+    # df['chord_notes'] = df['chord_notes'].apply(ast.literal_eval)
+    #
+    # df2 = pd.read_csv(filepaths[1], index_col=0)
+    # df2['chord_notes'] = df2['chord_notes'].apply(ast.literal_eval)
 
-    df2 = pd.read_csv(filepaths[1], index_col=0)
-    df2['chord_notes'] = df2['chord_notes'].apply(ast.literal_eval)
+    calculate_HC(df)
 
     # r1 = calculate_QO(df)
     # r2 = calculate_QD(df)
@@ -775,7 +781,7 @@ if __name__ == "__main__":
     # n, d, _, _, _, starts = get_sequences_onefile(fname, MAX_SEQ_DUR_LENGTH)
     # act_d = calculate_durations_training(d, starts)
     # for l in [3, 4, 5, 6]:
-    #     print('RM', calculate_RM(df, n, act_d, length=l, doDurs=False), 'l', l)
+    #     logger.info('RM', calculate_RM(df, n, act_d, length=l, doDurs=False), 'l', l)
 
     # r6 = calculate_PV(df, 4)
     # r7 = calculate_RV(df, 4)
@@ -790,13 +796,13 @@ if __name__ == "__main__":
     # sns.countplot(df2['duration'])
     # plt.show()
 
-    # print(r1)
-    # print(r2)
-    # print(r3)
-    # print(r4)
-    # print(r5)
-    # print(r6)
-    # print(r7)
+    # logger.info(r1)
+    # logger.info(r2)
+    # logger.info(r3)
+    # logger.info(r4)
+    # logger.info(r5)
+    # logger.info(r6)
+    # logger.info(r7)
 
     df = pd.DataFrame(data=[
         # {'pitch': 72, 'duration': 21, 'offset': 21, 'measure': 0, 'chord_notes': []},
@@ -855,13 +861,13 @@ if __name__ == "__main__":
         # {'pitch': 77, 'duration': 12, 'offset': 21, 'measure': 3, 'chord_notes': []},
     ])
 
-    # print(sorted(valids))
-    # print(calculate_QO(df))
-    # print(calculate_QD(df))
-    # print(calculate_CPR(df, 2))
-    # print(calculate_DPR(df, 12))
-    # print(calculate_TS(df, 12))
-    # print(calculate_PV(df, 4))
-    # print(calculate_RV(df, 1))
-    # print(calculate_RV(df, 4))
-    print(calculate_HC(df))
+    # logger.info(sorted(valids))
+    # logger.info(calculate_QO(df))
+    # logger.info(calculate_QD(df))
+    # logger.info(calculate_CPR(df, 2))
+    # logger.info(calculate_DPR(df, 12))
+    # logger.info(calculate_TS(df, 12))
+    # logger.info(calculate_PV(df, 4))
+    # logger.info(calculate_RV(df, 1))
+    # logger.info(calculate_RV(df, 4))
+    logger.info(calculate_HC(df))

@@ -1,9 +1,9 @@
 mlflow:
   experiment_name: mono_duration_encoding
-#  experiment_name: none
+  run_name: bigger batch size
 
+#  experiment_name: none
 #  run_name: default
-  run_name: same start/end symbol
 
 dataset:
   encoding_type: duration
@@ -12,9 +12,18 @@ dataset:
   chord_extension_count: 7
   duration_correction: 0
   transpose_mode: all
-  sequence_size: 41
+  sequence_size: 81
+
+
+#Learning rate 5e−1
+#Weight decay 1e−6
+#Dropout 0
+#Number of epochs 500
+#Batch size 256
+#Sequence Length 100
 
 model:
+  use_padding_idx: True
   start_pitch_symbol: 129
   end_pitch_symbol: 129
   start_attack_symbol: -2
@@ -33,9 +42,9 @@ model:
   nn_hidden_size: 128
   nn_output_size: 32
 
-  embedding_dropout_rate: 0.33
-  nn_dropout_rate: 0.33
-  lstm_dropout_rate: 0.33
+  embedding_dropout_rate: 0
+  nn_dropout_rate: 0
+  lstm_dropout_rate: 0
 
   normalize: False
   gradient_clipping: 0.25
@@ -46,9 +55,10 @@ model:
 
 training:
   num_batches: 20000
-  batch_size: 64
-  num_epochs: 35
+  batch_size: 128
+  num_epochs: 10
   seed: 1234567890
   learning_rate: 0.5
   momentum: 0.9
   weight_decay: 1e-6
+

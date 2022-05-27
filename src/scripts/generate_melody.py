@@ -23,14 +23,14 @@ if __name__ == "__main__":
     model_path = os.path.join(
         src_path,
         'mlruns', '2',
-        'f9f65390db154400be658fccefa23d45', 'artifacts',
-        'transpose_all_chord_extended_7_batchsize_64_seed_1234567890.pt'
+        '603b3504919e46b3980a9ddfcc110fcf', 'artifacts',
+        '22_05_22_00_52_58_transpose_all_chord_extended_7_batchsize_128_seed_1234567890.pt'
     )
 
     model = torch.load(open(model_path, 'rb'))
 
-    temperature = .75
-    sample = (True, False)
+    temperature = 0.01
+    sample = (False, False)
 
     generator = DurationGenerator(
         model,

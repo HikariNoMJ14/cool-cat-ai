@@ -131,8 +131,10 @@ class DurationGenerator(MelodyGenerator):
                     np.array(
                         self.chord_mapping[
                             self.melody.flat_chord_progression[
-                                int(np.floor(tick * self.melody.chord_progression_time_signature[0])) %
-                                len(self.melody.flat_chord_progression)
+                                int(np.floor(
+                                    tick /
+                                    (TICKS_PER_MEASURE / self.melody.chord_progression_time_signature[0]))
+                                ) % len(self.melody.flat_chord_progression)
                                 ]
                         ])
                     for tick in self.generated_improvised_ticks[slice_start:slice_end]
@@ -294,11 +296,13 @@ class DurationGenerator(MelodyGenerator):
         past_improvised = self.get_improvised_context(tick)
         past_original, present, future = self.get_original_context(tick)
 
-        assert past_improvised.eq(self.end_pitch_symbol).count_nonzero() == 0
-        assert past_original.eq(self.end_pitch_symbol).count_nonzero() == 0
         assert present.eq(self.start_pitch_symbol).count_nonzero() == 0 and \
                present.eq(self.end_pitch_symbol).count_nonzero() == 0
-        assert future.eq(self.start_pitch_symbol).count_nonzero() == 0
+
+        if self.start_pitch_symbol != self.end_pitch_symbol:
+            assert past_improvised.eq(self.end_pitch_symbol).count_nonzero() == 0
+            assert past_original.eq(self.end_pitch_symbol).count_nonzero() == 0
+            assert future.eq(self.start_pitch_symbol).count_nonzero() == 0
 
         return past_improvised, past_original, present, future
 
@@ -328,16 +332,28 @@ class DurationGenerator(MelodyGenerator):
         new_duration = self.model.convert_ids_to_durations(new_duration)
 
         assert 0 <= new_pitch <= 128
-        assert new_duration > 0
+
+        if new_duration == 0:
+            self.logger.error(
+                'Predicted duration is 0')  # TODO fix dataset and make it impossible to predict duration=0
+            new_duration = torch.Tensor(1)
+        # assert new_duration > 0
 
         return new_pitch, new_duration
 
-    def save(self):
+    def save(self, save_path=None):
         new_melody = pd.DataFrame()
         new_melody['ticks'] = pd.Series(data=self.generated_improvised_ticks)
         new_melody['offset'] = pd.Series(data=self.generated_improvised_offsets)
         new_melody['improvised_pitch'] = pd.Series(data=self.generated_improvised_pitches).replace(REST_SYMBOL, np.nan)
         new_melody['improvised_duration'] = pd.Series(data=self.generated_improvised_durations)
+        new_melody['chord_name'] = pd.Series(data=[
+            self.melody.flat_chord_progression[
+                int(np.floor(
+                    tick /
+                    (TICKS_PER_MEASURE / self.melody.chord_progression_time_signature[0]))
+                ) % len(self.melody.flat_chord_progression)
+                ] for tick in self.generated_improvised_ticks])
 
         self.melody.encoded = new_melody
 
@@ -347,8 +363,19 @@ class DurationGenerator(MelodyGenerator):
             self.model.name
         )
 
+        if save_path is not None:
+            out_path = os.path.join(out_path, save_path)
+
         if not os.path.exists(out_path):
             os.makedirs(out_path)
 
-        filename = f'{time.strftime("%y_%m_%d_%H_%M_%S")} {self.melody.song_name}.mid'
-        self.melody.to_midi(os.path.join(out_path, filename))
+        filename = f'{time.strftime("%y_%m_%d_%H_%M_%S")} {self.melody.song_name}'
+        filename_mid = f'{filename}.mid'
+        filename_csv = f'{filename}.csv'
+        out_filepath_mid = os.path.join(out_path, filename_mid)
+        out_filepath_csv = os.path.join(out_path, filename_csv)
+
+        self.melody.to_midi(out_filepath_mid, 150)
+        self.melody.encoded.to_csv(out_filepath_csv)
+
+        return out_filepath_csv

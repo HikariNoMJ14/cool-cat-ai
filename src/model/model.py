@@ -75,8 +75,18 @@ class Model(nn.Module):
             nn.Embedding(self.offset_size, self.embedding_size),
             nn.Dropout(self.embedding_dropout_rate)
         )
+
+        if kwargs['use_padding_idx'] and self.start_pitch_symbol != self.end_pitch_symbol:
+            self.logger.warning('Start pitch symbol and end pitch symbol are different, '
+                                'padding_idx will only act on start pitch symbol')
+
         self.pitch_encoder = nn.Sequential(
-            nn.Embedding(self.pitch_size, self.embedding_size, scale_grad_by_freq=True),
+            nn.Embedding(
+                self.pitch_size,
+                self.embedding_size,
+                scale_grad_by_freq=True,
+                padding_idx=self.start_pitch_symbol if kwargs['use_padding_idx'] else None
+            ),
             nn.Dropout(self.embedding_dropout_rate)
         )
         # TODO add padding_idx for 128 (rest)? what about START_SYMBOL and END_SYMBOL?

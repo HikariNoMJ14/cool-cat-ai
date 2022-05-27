@@ -17,8 +17,8 @@ src_path = os.path.join(dir_path, '..', '..')
 
 class TimeStepGenerator(MelodyGenerator):
 
-    def __init__(self, model, temperature, logger):
-        super(TimeStepGenerator, self).__init__(model, temperature, logger)
+    def __init__(self, model, temperature, sample, logger):
+        super(TimeStepGenerator, self).__init__(model, temperature, sample, logger)
 
         self.start_attack_symbol = model.start_attack_symbol
         self.end_attack_symbol = model.end_attack_symbol
