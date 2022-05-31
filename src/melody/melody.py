@@ -14,9 +14,9 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from src.ezchord import Chord
 from src.utils import notes_to_midi, notes_and_chord_to_midi, \
     flatten_chord_progression, filepath_to_song_name, replace_enharmonic
+from src.utils.ezchord import Chord
 from src.utils.constants import OCTAVE_SEMITONES
 
 dir_path = os.path.dirname(os.path.realpath(__file__))

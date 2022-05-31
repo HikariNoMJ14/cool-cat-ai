@@ -9,8 +9,8 @@ import pandas as pd
 import mingus.core.scales as scales
 import mingus.core.notes as notes
 
-from src.ezchord import Chord
 from src.utils import replace_enharmonic
+from src.utils.ezchord import Chord
 from src.utils.constants import TICKS_PER_MEASURE, REST_VAL, PITCH_CLS
 
 logger = logging.getLogger()

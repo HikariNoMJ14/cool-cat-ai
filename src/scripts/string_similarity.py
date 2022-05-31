@@ -1,10 +1,6 @@
-from difflib import SequenceMatcher
 import pandas as pd
 
-
-def similar(a, b):
-    return SequenceMatcher(None, a, b).ratio()
-
+from src.utils import similar
 
 if __name__ == '__main__':
     version = '1.0'

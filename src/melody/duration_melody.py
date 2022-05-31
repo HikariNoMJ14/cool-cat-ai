@@ -1,15 +1,14 @@
 import os
-import json
 import numpy as np
 import pandas as pd
 import torch
 import pretty_midi as pm
 
 from src.melody import Melody
-from src.ezchord import Chord
-from src.utils import get_chord_progressions, is_weakly_polyphonic, is_strongly_polyphonic, \
+from src.utils import is_weakly_polyphonic, is_strongly_polyphonic, \
     remove_weak_polyphony, remove_strong_polyphony, \
     flatten_chord_progression
+from src.utils.ezchord import Chord
 from src.utils.constants import OCTAVE_SEMITONES, REST_SYMBOL
 
 dir_path = os.path.dirname(os.path.realpath(__file__))

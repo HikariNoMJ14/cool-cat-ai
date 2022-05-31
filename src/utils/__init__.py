@@ -7,12 +7,12 @@ import json
 
 import pandas as pd
 import numpy as np
-
-from src.ezchord import Chord
+from difflib import SequenceMatcher
 
 import pretty_midi as pm
 import mingus.core.notes as notes
 
+from src.utils.ezchord import Chord
 from src.utils.metrics import Metric
 from src.utils.constants import SOURCES, INPUT_DATA_FOLDER
 
@@ -412,6 +412,10 @@ def calculate_melody_results(melody):
         all_results[i] = results
 
     return all_results
+
+
+def similar(a, b):
+    return SequenceMatcher(None, a, b).ratio()
 
 
 def replace_enharmonic(pitch):

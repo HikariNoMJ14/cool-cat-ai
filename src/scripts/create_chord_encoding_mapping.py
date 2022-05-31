@@ -2,8 +2,8 @@ import json
 
 import numpy as np
 
-from src.ezchord import Chord
 from src.utils import get_chord_progressions
+from src.utils.ezchord import Chord
 from src.melody import Melody
 
 if __name__ == "__main__":
