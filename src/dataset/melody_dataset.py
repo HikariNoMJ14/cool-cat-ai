@@ -1,8 +1,11 @@
 import os
 from glob import glob
 from datetime import datetime
-import torch
+
+import music21
 import numpy as np
+import pickle
+import torch
 from torch.utils.data import ConcatDataset
 
 from src.melody import TimeStepMelody, DurationMelody
@@ -26,7 +29,8 @@ class MelodyDataset:
                  logger):
         super(MelodyDataset, self).__init__()
 
-        self.dataset = None
+        self.tensor_dataset = None
+        self.melody_dataset = []
 
         assert transpose_mode == 'all' or transpose_mode == 'c' or transpose_mode == 'none'
 
@@ -40,9 +44,13 @@ class MelodyDataset:
         self.melody_info = {}
         self.chord_progressions = get_chord_progressions(src_path)
 
-        if self.encoding_type == 'timestep':
+        if self.encoding_type == 'timestep'\
+                or self.encoding_type == 'timestep_base'\
+                or self.encoding_type == 'timestep_chord':
             self.melody_class = TimeStepMelody
-        elif self.encoding_type == 'duration':
+        elif self.encoding_type == 'duration'\
+                or self.encoding_type == 'duration_base'\
+                or self.encoding_type == 'duration_chord':
             self.melody_class = DurationMelody
         else:
             raise Exception('Encoding type not supported!')
@@ -51,7 +59,7 @@ class MelodyDataset:
             src_path,
             'data',
             'tensor_dataset',
-            self.encoding_type,
+            self.encoding_type.split('_')[0],
             'poly' if self.polyphonic else 'mono'
         )
         self.name = f'transpose_{self.transpose_mode}_' \
@@ -89,14 +97,24 @@ class MelodyDataset:
 
             c += 1
 
+    def find_interval_to_c(self, melody):
+        transpose_semitones = music21.interval.Interval(
+            music21.pitch.Pitch(melody.chord_progression_key),
+            music21.pitch.Pitch('C')
+        ).semitones
+
+        transpose_semitones = ((transpose_semitones + 6) % 12) - 6
+
+        return transpose_semitones
+
     def split(self, split=(0.85, 0.10, 0.05), seed=None):
         assert sum(split) == 1
 
-        dataset = self.dataset
-        num_examples = len(dataset)
+        tensor_dataset = self.tensor_dataset
+        num_examples = len(tensor_dataset)
 
         return torch.utils.data.random_split(
-            dataset, [
+            tensor_dataset, [
                 int(round(num_examples * split[0])),
                 int(round(num_examples * split[1])),
                 int(round(num_examples * split[2]))
@@ -106,18 +124,25 @@ class MelodyDataset:
 
     # TODO also save song info to cross-reference songs and tensors
     def save(self):
-        out_filename = f'{datetime.now().strftime("%Y_%m_%d_%H%M%S")}_' + self.name + '.pt'
+        out_filename = f'{datetime.now().strftime("%Y_%m_%d_%H%M%S")}_' + self.name
+        melody_out_filename = out_filename + '.pickle'
+        tensor_out_filename = out_filename + '.pt'
+
         if not os.path.exists(self.out_folder):
             os.makedirs(self.out_folder)
 
-        out_filepath = os.path.join(self.out_folder, out_filename)
+        melody_out_filepath = os.path.join(self.out_folder, melody_out_filename)
+        tensor_out_filepath = os.path.join(self.out_folder, tensor_out_filename)
 
-        with open(out_filepath, 'wb+') as f:
-            torch.save(self.dataset, f)
+        with open(melody_out_filepath, 'wb+') as f:
+            pickle.dump(self.melody_dataset, f)
+
+        with open(tensor_out_filepath, 'wb+') as f:
+            torch.save(self.tensor_dataset, f)
 
     def load(self, datetime=None):
         if datetime is None:
-            # Get latest model
+            # Get the latest model
             candidate_filepaths = glob(os.path.join(self.out_folder, f'*{self.name}.pt'))
             load_filepath = sorted(candidate_filepaths)[-1]
         else:
@@ -127,18 +152,10 @@ class MelodyDataset:
                 raise FileNotFoundError(f'File {load_filepath} doesn\'t exist')
 
         with open(load_filepath, 'rb') as f:
-            self.dataset = torch.load(f)
+            self.tensor_dataset = torch.load(f)
 
     def create(self):
-        datasets = []
-
-        if self.transpose_mode == 'c':
-            transpose_interval = None  # TODO find transpose interval to C
-            transpose_intervals = [transpose_interval]
-        elif self.transpose_mode == 'all':
-            transpose_intervals = np.arange(-6, 6)
-        else:
-            transpose_intervals = [0]
+        tensor_dataset = []
 
         for improvised_filepath in self.improvised_filepaths:
             self.logger.info(improvised_filepath)
@@ -146,6 +163,8 @@ class MelodyDataset:
             melody = self.melody_class(
                 filepath=improvised_filepath,
                 polyphonic=False,
+                chord_encoding_type=self.chord_encoding_type,
+                chord_extension_count=self.chord_extension_count,
                 duration_correction=self.duration_correction
             )
             melody.set_song_structure(self.chord_progressions[melody.song_name])
@@ -155,14 +174,24 @@ class MelodyDataset:
             melody.encode(improvised_filepath, original_filepath)
             melody.save_encoded()
 
+            if self.transpose_mode == 'c':
+                transpose_interval = self.find_interval_to_c(melody)
+                transpose_intervals = [transpose_interval]
+            elif self.transpose_mode == 'all':
+                transpose_intervals = np.arange(-6, 6)
+            else:
+                transpose_intervals = [0]
+
             for transpose_interval in transpose_intervals:
                 if len(transpose_intervals) > 1:
                     self.logger.debug(f'Transpose Interval: {transpose_interval}')
 
                 melody_tensor = melody.to_tensor(transpose_interval)
 
-                datasets.append(melody_tensor)
+                tensor_dataset.append(melody_tensor)
 
-        self.dataset = ConcatDataset(datasets=datasets)
+                self.melody_dataset.append(melody)
+
+        self.tensor_dataset = ConcatDataset(datasets=tensor_dataset)
 
         self.save()

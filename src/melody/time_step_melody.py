@@ -16,17 +16,14 @@ from src.utils.constants import OCTAVE_SEMITONES, REST_SYMBOL
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
 
-chord_mapping_filepath = os.path.join(src_path, 'data', 'tensor_dataset', 'chords', 'extended_7.json')
-
-
 # TODO Class inheritance not great - rethink
 
 
 class TimeStepMelody(Melody):
     VERSION = '1.2'
 
-    def __init__(self, filepath, polyphonic, duration_correction):
-        super(TimeStepMelody, self).__init__(filepath, self.VERSION)
+    def __init__(self, filepath, polyphonic, chord_encoding_type, chord_extension_count, duration_correction):
+        super(TimeStepMelody, self).__init__(filepath, self.VERSION, chord_encoding_type, chord_extension_count)
 
         self.encoded = None
         self.polyphonic = polyphonic
@@ -38,10 +35,6 @@ class TimeStepMelody(Melody):
             'poly' if self.polyphonic else 'mono',
         )
         self.duration_correction = duration_correction
-
-        # TODO pass chord encoding type
-        with open(chord_mapping_filepath) as fp:
-            self.chord_mapping = json.load(fp)
 
     @staticmethod
     def multiple_pitches_to_string(pitches):
@@ -198,26 +191,6 @@ class TimeStepMelody(Melody):
 
         self.encoded.to_csv(f'{self.encoded_folder}/{self.source}/{self.filename}')
 
-    # TODO choice for which extensions to add is a bit random
-    @staticmethod
-    def extended_chord_encoding(chord_pitches, chord_notes_count):
-        upper_extension_index = -3
-
-        # If 13th chord, remove 11th
-        if len(chord_pitches) == 8:
-            del chord_pitches[-2]
-
-        while True:
-            if len(chord_pitches) == chord_notes_count:
-                # if chord_pitches != sorted(chord_pitches):
-                #     print(f'Notes {chord_pitches} not sorted')
-
-                return np.array(sorted(chord_pitches))
-
-            # Append extensions to fill up 'chord_notes_count' notes
-            upper_extension = chord_pitches[upper_extension_index] + OCTAVE_SEMITONES
-            chord_pitches.append(upper_extension)
-
     def to_tensor(self, transpose_interval):
         offsets = torch.from_numpy(
             np.array([self.encoded['offset']])
@@ -242,8 +215,8 @@ class TimeStepMelody(Melody):
         chord_pitches = torch.from_numpy(
             np.stack(
                 self.encoded['chord_name'].apply(
-                    lambda x: np.array(self.chord_mapping[x]) + transpose_interval
-                )
+                    lambda x: self.transpose_chord(x, transpose_interval)
+                ).fillna(REST_SYMBOL)
             )
         ).long().clone().transpose(0, 1)
 

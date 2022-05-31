@@ -15,14 +15,13 @@ from src.utils.constants import OCTAVE_SEMITONES, REST_SYMBOL
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
 
-chord_mapping_filepath = os.path.join(src_path, 'data', 'tensor_dataset', 'chords', 'extended_7.json')
-
 
 class DurationMelody(Melody):
     VERSION = '1.2'
 
-    def __init__(self, filepath, polyphonic, duration_correction):
-        super(DurationMelody, self).__init__(filepath, self.VERSION)
+    def __init__(self, filepath, polyphonic,
+                 chord_encoding_type='extended', chord_extension_count=7, duration_correction=0):
+        super(DurationMelody, self).__init__(filepath, self.VERSION, chord_encoding_type, chord_extension_count)
 
         self.encoded = None
         self.polyphonic = polyphonic
@@ -34,10 +33,6 @@ class DurationMelody(Melody):
             'poly' if self.polyphonic else 'mono',
         )
         self.duration_correction = duration_correction
-
-        # TODO pass chord encoding type
-        with open(chord_mapping_filepath) as fp:
-            self.chord_mapping = json.load(fp)
 
     @staticmethod
     def multiple_pitches_to_string(pitches):
@@ -111,10 +106,10 @@ class DurationMelody(Melody):
             ticks = row['ticks']
             duration = row['duration']
 
-            if i + 1 < dataset.shape[0]:
-                next_diff = dataset.iloc[i + 1]['ticks'] - (row['duration'] + row['ticks'])
-                if next_diff <= self.duration_correction:
-                    duration = duration + next_diff
+            # if i + 1 < dataset.shape[0]:
+            #     next_diff = dataset.iloc[i + 1]['ticks'] - (row['duration'] + row['ticks'])
+            #     if next_diff <= self.duration_correction:
+            #         duration = duration + next_diff
 
             rows.append({
                 'ticks': row['ticks'],
@@ -198,8 +193,8 @@ class DurationMelody(Melody):
         improvised_chord_pitches = torch.from_numpy(
             np.stack(
                 improvised_encoded['chord_name'].apply(
-                    lambda x: np.array(self.chord_mapping[x]) + transpose_interval
-                )
+                    lambda x: self.transpose_chord(x, transpose_interval)
+                ).fillna(REST_SYMBOL)
             )
         ).long().clone().transpose(0, 1)
 
@@ -237,8 +232,8 @@ class DurationMelody(Melody):
         original_chord_pitches = torch.from_numpy(
             np.stack(
                 original_encoded['chord_name'].apply(
-                    lambda x: np.array(self.chord_mapping[x]) + transpose_interval
-                )
+                    lambda x: self.transpose_chord(x, transpose_interval)
+                ).fillna(REST_SYMBOL)
             )
         ).long().clone().transpose(0, 1)
 
@@ -350,21 +345,3 @@ class DurationMelody(Melody):
         p.instruments.append(chords)
 
         p.write(out_filepath)
-
-
-if __name__ == "__main__":
-    chord_progressions = get_chord_progressions(src_path)
-
-    d = DurationMelody(
-        filepath='../data/split_melody_data/v1.2/JazzPage/A Felicidade -1-.csv',
-        polyphonic=False,
-        duration_correction=2
-    )
-    d.set_song_structure(chord_progressions[d.song_name])
-
-    d.encode(
-        # improvised_filepath=None,
-        improvised_filepath='../../data/split_melody_data/v1.2/JazzPage/A Felicidade -1-.csv',
-        original_filepath='../../data/split_melody_data/v1.2/Real Book/A Felicidade -o-.csv',
-    )
-    d.save_encoded()

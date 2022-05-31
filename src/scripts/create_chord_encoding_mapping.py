@@ -1,11 +1,15 @@
 import json
 
-from ezchord import Chord
+import numpy as np
 
-from utils import get_chord_progressions
-from melody import TimeStepMelody
+from src.ezchord import Chord
+from src.utils import get_chord_progressions
+from src.melody import Melody
 
 if __name__ == "__main__":
+    n_extensions = 12
+    encoding_type = 'compressed'
+
     all_chords = {}
     cp = get_chord_progressions()
 
@@ -15,14 +19,23 @@ if __name__ == "__main__":
                 if chord_name not in all_chords.keys():
                     chord = Chord(chord_name)
                     notes = chord.getMIDI()
-                    # TODO this is extended-7, generalize
-                    encoded = list([int(p) for p in TimeStepMelody.extended_chord_encoding(notes, 7)])
+
+                    if encoding_type == 'extended':
+                        encoded = list([int(p)
+                                        for p in Melody.extended_chord_encoding(notes, n_extensions)])
+                    elif encoding_type == 'fixed':
+                        encoded = list([int(p)
+                                        if not np.isnan(p) else None
+                                        for p in Melody.fixed_chord_encoding(notes, n_extensions)])
+                    elif encoding_type == 'compressed':
+                        encoded = list([int(p)
+                                        if not np.isnan(p) else None
+                                        for p in Melody.compressed_chord_encoding(notes)])
+                    else:
+                        raise Exception(f"Chord encoding {encoding_type} doesn't exists")
 
                     all_chords[chord_name] = encoded
 
-    # for k, v in all_chords.items():
-    #     print(k , v)
-
-    json.dump(all_chords, open('../../data/tensor_dataset/chords/extended_7.json', 'w+'))
+    json.dump(all_chords, open(f'../../data/tensor_dataset/chords/{encoding_type}_{n_extensions}.json', 'w+'))
 
 

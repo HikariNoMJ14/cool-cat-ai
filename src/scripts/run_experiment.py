@@ -7,7 +7,8 @@ import mlflow
 import yaml
 
 from src.dataset import MelodyDataset
-from src.model import TimeStepModel, DurationModel
+from src.model.duration import DurationBase, DurationChord, DurationModel
+from model.time_step.time_step_model import TimeStepModel
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -85,6 +86,20 @@ if __name__ == "__main__":
     momentum = float(training_config['momentum'])
     weight_decay = float(training_config['weight_decay'])
 
+    if chord_encoding_type == 'compressed' and chord_extension_count != 12:
+        raise Exception(f"Chord extension count has to be 12 for encoding type 'compressed'")
+
+    if encoding_type == 'timestep':
+        model_class = TimeStepModel
+    elif encoding_type == 'duration_base':
+        model_class = DurationBase
+    elif encoding_type == 'duration_chord':
+        model_class = DurationChord
+    elif encoding_type == 'duration':
+        model_class = DurationModel
+    else:
+        raise Exception(f'Unknown encoding type: {encoding_type}')
+
     try:
         logger.debug(f'Create new experiment: {experiment_name}')
         experiment_id = mlflow.create_experiment(experiment_name)
@@ -136,13 +151,6 @@ if __name__ == "__main__":
     mlflow.log_param('momentum', momentum)
     mlflow.log_param('weight_decay', weight_decay)
 
-    if encoding_type == 'timestep':
-        model_class = TimeStepModel
-    elif encoding_type == 'duration':
-        model_class = DurationModel
-    else:
-        raise Exception(f'Unknown encoding type: {encoding_type}')
-
     melody_dataset = MelodyDataset(
         encoding_type=encoding_type,
         polyphonic=polyphonic,
@@ -155,7 +163,7 @@ if __name__ == "__main__":
     melody_dataset.load()
 
     mlflow.log_param('dataset', melody_dataset.name)
-    mlflow.log_param('num_examples', len(melody_dataset.dataset))
+    mlflow.log_param('num_examples', len(melody_dataset.tensor_dataset))
 
     model = model_class(
         dataset=melody_dataset,

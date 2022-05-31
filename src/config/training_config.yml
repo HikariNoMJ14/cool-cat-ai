@@ -1,6 +1,6 @@
 mlflow:
-  experiment_name: mono_duration_encoding
-  run_name: bigger batch size
+  experiment_name: duration - v2
+  run_name: 0.25 dropout - no emb, big batch
 
 #  experiment_name: none
 #  run_name: default
@@ -12,7 +12,7 @@ dataset:
   chord_extension_count: 7
   duration_correction: 0
   transpose_mode: all
-  sequence_size: 81
+  sequence_size: 41
 
 
 #Learning rate 5e−1
@@ -23,7 +23,7 @@ dataset:
 #Sequence Length 100
 
 model:
-  use_padding_idx: True
+  use_padding_idx: False
   start_pitch_symbol: 129
   end_pitch_symbol: 129
   start_attack_symbol: -2
@@ -43,8 +43,8 @@ model:
   nn_output_size: 32
 
   embedding_dropout_rate: 0
-  nn_dropout_rate: 0
-  lstm_dropout_rate: 0
+  nn_dropout_rate: 0.25
+  lstm_dropout_rate: 0.25
 
   normalize: False
   gradient_clipping: 0.25
@@ -56,7 +56,7 @@ model:
 training:
   num_batches: 20000
   batch_size: 128
-  num_epochs: 10
+  num_epochs: 35
   seed: 1234567890
   learning_rate: 0.5
   momentum: 0.9

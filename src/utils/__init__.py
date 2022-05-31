@@ -13,7 +13,6 @@ from src.ezchord import Chord
 import pretty_midi as pm
 import mingus.core.notes as notes
 
-from src.objective_metrics import calculate_HC, calculate_silence_ratio
 from src.utils.metrics import Metric
 from src.utils.constants import SOURCES, INPUT_DATA_FOLDER
 
@@ -80,6 +79,7 @@ def filepath_to_song_name(filepath):
     song_name = re.sub('\(.*\)', '', song_name).strip()
 
     return song_name
+
 
 def filename_to_songname(filename):
     songname = filename.replace('.mid', '')
@@ -379,6 +379,8 @@ def notes_and_chord_to_midi(
 
 
 def calculate_melody_results(melody):
+    from evaluation.objective_metrics import calculate_HC, calculate_silence_ratio
+
     all_results = {}
     for i, melody_info in enumerate(melody.split_note_info):
         results = melody.chord_progression_comparison()
@@ -410,6 +412,42 @@ def calculate_melody_results(melody):
         all_results[i] = results
 
     return all_results
+
+
+def replace_enharmonic(pitch):
+    if pitch == 'C#':
+        return 'Db'
+    if pitch == 'C##':
+        return 'D'
+    if pitch == 'D#':
+        return 'Eb'
+    if pitch == 'Fb':
+        return 'E'
+    if pitch == 'D##':
+        return 'E'
+    if pitch == 'E#':
+        return 'F'
+    if pitch == 'E##':
+        return 'F#'
+    if pitch == 'Gb':
+        return 'F#'
+    if pitch == 'F##':
+        return 'G'
+    if pitch == 'G#':
+        return 'Ab'
+    if pitch == 'G##':
+        return 'B'
+    if pitch == 'Bbb':
+        return 'B'
+    if pitch == 'A#':
+        return 'Bb'
+    if pitch == 'A##':
+        return 'B'
+    if pitch == 'Cb':
+        return 'B'
+    if pitch == 'B#':
+        return 'C'
+    return pitch
 
 # if __name__ == "__main__":
 # for i in range(128):

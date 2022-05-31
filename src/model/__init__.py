@@ -1,3 +1,8 @@
-from src.model.model import Model
-from src.model.time_step_model import TimeStepModel
-from src.model.duration_model import DurationModel
+from src.model.base import BaseModel
+from src.model.base import ChordModel
+
+from src.model.duration import DurationBase
+from src.model.duration import DurationChord
+from src.model.duration import DurationModel
+
+from src.model.time_step import TimeStepModel
