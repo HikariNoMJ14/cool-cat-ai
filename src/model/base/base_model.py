@@ -152,18 +152,15 @@ class BaseModel(nn.Module):
 
                 self.logger.info(f'--- Epoch {epoch} ---')
 
-                train_loss, train_metrics = self.loss_and_accuracy(
+                train_loss, train_metrics = self.do_train(
                     dataset=train_dataset,
                     optimizer=optimizer,
-                    phase='train',
                     batch_size=batch_size,
                     num_batches=num_batches
                 )
 
-                valid_loss, valid_metrics = self.loss_and_accuracy(
+                valid_loss, valid_metrics = self.do_evaluate(
                     dataset=val_dataset,
-                    optimizer=optimizer,
-                    phase='test',
                     batch_size=batch_size,
                     num_batches=int(num_batches // 5)
                 )
@@ -238,11 +235,8 @@ class BaseModel(nn.Module):
                 with open(checkpoint_path, 'wb') as f:
                     torch.save(self, f)
 
-    def loss_and_accuracy(self, dataset, phase, optimizer, batch_size, num_batches=None):
-        if phase == 'train':
-            self.train()
-        elif phase == 'eval' or phase == 'test':
-            self.eval()
+    def do_train(self, dataset, batch_size, optimizer, num_batches=None):
+        self.train()
 
         loss = Metric()
         metrics = {k: Metric() for k in self.METRICS_LIST}
@@ -259,15 +253,14 @@ class BaseModel(nn.Module):
             prediction = self(features)
             current_loss, current_metrics = self.loss_function(prediction, label)
 
-            if phase == 'train':
-                optimizer.zero_grad()
-                current_loss.backward()
+            optimizer.zero_grad()
+            current_loss.backward()
 
-                grad_norm = nn.utils.clip_grad_norm_(self.parameters(), self.gradient_clipping)
-                optimizer.step()
+            grad_norm = nn.utils.clip_grad_norm_(self.parameters(), self.gradient_clipping)
+            optimizer.step()
 
-                if self.normalize:
-                    self.normalize_embeddings()
+            if self.normalize:
+                self.normalize_embeddings()
 
             loss.update(float(current_loss), batch_size)
             logging_loss.update(float(current_loss), batch_size)
@@ -275,22 +268,53 @@ class BaseModel(nn.Module):
                 metrics[name].update(float(current_metrics[name]))
                 logging_metrics[name].update(float(current_metrics[name]), self.sequence_size)
 
-            if phase == 'train':
-                if i % self.LOG_INTERVAL == 0 and i > 0:
-                    cur_loss = logging_loss.avg
-                    metric_str = ' | '.join([f'{k}: {v.avg:5.2f}' for k, v in logging_metrics.items()])
+            if i % self.LOG_INTERVAL == 0 and i > 0:
+                cur_loss = logging_loss.avg
+                metric_str = ' | '.join([f'{k}: {v.avg:5.2f}' for k, v in logging_metrics.items()])
 
-                    self.logger.info(
-                        f'| {int(100 * i / num_batches):3d}% '
-                        f'| loss {cur_loss:5.2f} '
-                        f'| ppl {np.exp(cur_loss):6.2f} '
-                        f'| grad_norm {grad_norm:5.2f} '
-                        f'| {metric_str}'
-                    )
+                self.logger.info(
+                    f'| {int(100 * i / num_batches):3d}% '
+                    f'| loss {cur_loss:5.2f} '
+                    f'| ppl {np.exp(cur_loss):6.2f} '
+                    f'| grad_norm {grad_norm:5.2f} '
+                    f'| {metric_str}'
+                )
 
-                    logging_loss.reset()
-                    for name in metrics.keys():
-                        logging_metrics[name].reset()
+                logging_loss.reset()
+                for name in metrics.keys():
+                    logging_metrics[name].reset()
+
+        avg_loss = loss.avg
+        avg_metrics = {}
+        for name in metrics:
+            avg_metrics[name] = metrics[name].avg
+
+        return avg_loss, avg_metrics
+
+    def do_evaluate(self, dataset, batch_size, num_batches=None):
+        self.eval()
+
+        loss = Metric()
+        metrics = {k: Metric() for k in self.METRICS_LIST}
+        logging_loss = Metric()
+        logging_metrics = {k: Metric() for k in self.METRICS_LIST}
+
+        if num_batches is None:
+            num_batches = self.get_num_batches(dataset, batch_size)
+
+        with torch.no_grad():
+            for i in range(num_batches):
+                batch = self.get_batch(dataset, batch_size)
+
+                features, label = self.prepare_examples(batch)
+                prediction = self(features)
+                current_loss, current_metrics = self.loss_function(prediction, label)
+
+                loss.update(float(current_loss), batch_size)
+                logging_loss.update(float(current_loss), batch_size)
+                for name in metrics.keys():
+                    metrics[name].update(float(current_metrics[name]))
+                    logging_metrics[name].update(float(current_metrics[name]), self.sequence_size)
 
         avg_loss = loss.avg
         avg_metrics = {}

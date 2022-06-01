@@ -53,7 +53,7 @@ class Melody:
         ]
     }
 
-    def __init__(self, filepath, version, chord_encoding_type='extended', chord_extension_count=7):
+    def __init__(self, filepath, version='1.2', chord_encoding_type='extended', chord_extension_count=7):
         self.mido_obj = None
         self.music21_obj = None
         self.key = None
