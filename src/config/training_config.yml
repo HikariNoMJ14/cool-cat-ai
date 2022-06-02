@@ -1,6 +1,6 @@
 mlflow:
   experiment_name: duration - v2
-  run_name: 0.25 dropout - no emb, big batch
+  run_name: 0.25 dropout - no emb
 
 #  experiment_name: none
 #  run_name: default
@@ -55,7 +55,7 @@ model:
 
 training:
   num_batches: 20000
-  batch_size: 128
+  batch_size: 64
   num_epochs: 35
   seed: 1234567890
   learning_rate: 0.5
