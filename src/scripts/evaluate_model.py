@@ -20,9 +20,9 @@ src_path = os.path.join(dir_path, '..', '..')
 if __name__ == "__main__":
     model_path = os.path.join(
         src_path,
-        'mlruns', '2',
-        '603b3504919e46b3980a9ddfcc110fcf', 'artifacts',
-        '22_05_22_00_52_58_transpose_all_chord_extended_7_batchsize_128_seed_1234567890.pt'
+        'mlruns', '5',
+        '72b4d266dbca40308624362723ce7f11', 'artifacts',
+        '22_06_01_23_14_12_transpose_all_chord_extended_7_batchsize_64_seed_1234567890_best_val.pt'
     )
 
     model = torch.load(open(model_path, 'rb'))

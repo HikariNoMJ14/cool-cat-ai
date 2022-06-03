@@ -18,7 +18,7 @@ src_path = os.path.join(dir_path, '..', '..')
 class DurationMelody(Melody):
     VERSION = '1.2'
 
-    def __init__(self, filepath, polyphonic,
+    def __init__(self, filepath, polyphonic=False,
                  chord_encoding_type='extended', chord_extension_count=7, duration_correction=0):
         super(DurationMelody, self).__init__(filepath, self.VERSION, chord_encoding_type, chord_extension_count)
 

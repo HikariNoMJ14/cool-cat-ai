@@ -111,7 +111,7 @@ class DurationBase(BaseModel):
     def setup_duration_mapping(self):
         all_durations = set({})
 
-        for example in self.dataset.dataset:
+        for example in self.dataset.tensor_dataset:
             all_durations.update(set(example[:, self.TENSOR_IDX_MAPPING['duration']].tolist()))
 
         all_durations.add(self.start_duration_symbol)

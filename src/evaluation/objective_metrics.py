@@ -121,35 +121,6 @@ def compute_piece_chord_progression_irregularity(chord_sequence, ngram=3):
 
     return len(unique_set) / num_ngrams
 
-
-# def compute_structure_indicator(mat_file, low_bound_sec=0, upp_bound_sec=128, sample_rate=2):
-#     '''
-#     Computes the structureness indicator SI(low_bound_sec, upp_bound_sec) from fitness scape plot (stored in a MATLAB .mat file).
-#     (Metric ``SI``)
-#
-#     Parameters:
-#       mat_file (str): path to the .mat file containing fitness scape plot of a piece. (computed by ``run_matlab_scapeplot.py``).
-#       low_bound_sec (int, >0): the smallest timescale (in seconds) you are interested to examine.
-#       upp_bound_sec (int, >0): the largest timescale (in seconds) you are interested to examine.
-#       sample_rate (int): sample rate (in Hz) of the input fitness scape plot.
-#
-#     Returns:
-#       float: 0~1, the structureness indicator (i.e., max fitness value) of the piece within the given range of timescales.
-#     '''
-#
-#     assert low_bound_sec > 0 and upp_bound_sec > 0, '`low_bound_sec` and `upp_bound_sec` should be positive, got: low_bound_sec={}, upp_bound_sec={}.'.format(
-#         low_bound_sec, upp_bound_sec)
-#     low_bound_ts = int(low_bound_sec * sample_rate) - 1
-#     upp_bound_ts = int(upp_bound_sec * sample_rate)
-#     f_mat = read_fitness_mat(mat_file)
-#
-#     if low_bound_ts >= f_mat.shape[0]:
-#         score = 0
-#     else:
-#         score = np.max(f_mat[low_bound_ts: upp_bound_ts])
-#
-#     return score
-
 valid_tempos = [3, 6, 12, 24, 48, 1, 2, 4, 8, 16, 0]
 valids = []
 for r1 in valid_tempos:
@@ -173,7 +144,7 @@ def calculate_durations_training(seqs_dur, s):
         act_seq_durs.append(act_durs)
     return act_seq_durs
 
-
+# https://github.com/Impro-Visor/sequence_gan
 # Qualified Offset frequency (QR)
 # QR measures the frequency of note durations within valid beat ratios of
 # {1, 1/2, 1/4, 1/8, 1/16}, their dotted and triplet counter-
@@ -197,6 +168,7 @@ def calculate_QO(melody):
     return valid_count / total_count
 
 
+# https://github.com/Impro-Visor/sequence_gan
 # Qualified Duration frequency (QR)
 # QR measures the frequency of note durations within valid beat ratios of
 # {1, 1/2, 1/4, 1/8, 1/16}, their dotted and triplet counter-
@@ -219,7 +191,7 @@ def calculate_QD(melody):
 
     return valid_count / total_count
 
-
+# https://github.com/Impro-Visor/sequence_gan
 # Consecutive Pitch Repetitions (CPR)
 # For a specified length l, CPR measures the frequency of occurrences of l
 # consecutive pitch repetitions. We do not want the generator
@@ -257,6 +229,7 @@ def calculate_CPR(melody, length):
     return n_consecutive / total
 
 
+# https://github.com/Impro-Visor/sequence_gan
 # Durations of Pitch Repetitions (DPR)
 # For a specified duration d, measures the frequency of pitch repetitions that last
 # at least d long in total. We do not want the generator to repeat
@@ -304,6 +277,7 @@ def calculate_DPR(melody, duration):
     return n_consecutive / total
 
 
+# https://github.com/Impro-Visor/sequence_gan
 # Tone Spans (TS)
 # For a specified tone distance d, TS mea-
 # sures the frequency of pitch changes that span more than d
@@ -328,6 +302,7 @@ def calculate_TS(melody, distance):
     return count / total
 
 
+# https://github.com/Impro-Visor/sequence_gan
 # Pitch Variations (PV)
 # PV measures how many distinct
 # pitches the model plays within a sequence.
@@ -351,6 +326,7 @@ def calculate_PV(melody, window_size):
     return np.mean(pitch_variations) if len(pitch_variations) > 0 else 0.0
 
 
+# https://github.com/Impro-Visor/sequence_gan
 # Pitch Variations Frequency (PVF)
 # PVF measures how many distinct
 # pitches the model plays within a sequence divided by the total number of notes in that sequence.
@@ -373,6 +349,7 @@ def calculate_PVF(melody, window_size):
     return pitch_variations / n_windows
 
 
+# https://github.com/Impro-Visor/sequence_gan
 # Rhythm Variations (RV)
 # RV measures how many distinct note durations the model plays within a sequence.
 
@@ -395,6 +372,7 @@ def calculate_RV(melody, window_size):
     return np.mean(rhythm_variation) if len(rhythm_variation) > 0 else 0.0
 
 
+# https://github.com/Impro-Visor/sequence_gan
 # Off-beat Recovery frequency (OR)
 # Given an offset d, OR measures how frequently the model can recover back onto
 # the beat after being forced to be off by d timesteps. For ex-
@@ -418,55 +396,48 @@ def calculate_OR(melody, l):
     return valid_count
 
 
+def calculate_corpus_sequences(dataset, l):
+    corpus_sequences = {}
+
+    for melody_tensor in dataset.tensor_dataset:
+        for i in range(melody_tensor.shape[0] - l + 1):
+            pitch = tuple(melody_tensor[i:i + l, 3].tolist())
+            duration = tuple(melody_tensor[i:i + l, 4].tolist())
+
+            seq = (pitch, duration)
+            corpus_sequences[seq] = True
+
+    return corpus_sequences
+
+
+# https://github.com/Impro-Visor/sequence_gan
 # Rote Memorization frequencies (RM)
 # Given a specified length l, RM measures how frequently the model copies
 # note sequences of length l from the corpus.
 
+def calculate_RM(melody, corpus_sequences, l):
+    match_sequences = []
+    matches = 0
+    total = 0
 
-def calculate_RM(melody, ns, ds, length=3, doDurs=False):
-    ltuples = {}
-    matchlist = []
-    total = 0.0
-    matches = 0.0
+    for i in range(len(melody) - l + 1):
+        pitch = tuple(melody.iloc[i:i + l, 2].values)
+        duration = tuple(melody.iloc[i:i + l, 3].values)
 
-    pitches = melody['pitch']
-    durations = melody['duration']
+        sequence = (pitch, duration)
 
-    for i in range(len(ns)):
-        n = ns[i]
-        d = ds[i]
-        if len(n) < length:
-            continue
-        for j in range(len(n) - length + 1):
-            if doDurs:
-                seq = (tuple(n[j:j + length]), tuple(d[j:j + length]))
-            else:
-                seq = tuple(n[j:j + length])
-            ltuples[seq] = True
-    for i in range(len(pitches)):
-        n = pitches[i]
-        d = durations[i]
-        if len(n) < length:
-            continue
-        for j in range(len(n) - length + 1):
-            if doDurs:
-                seq = (tuple(n[j:j + length]), tuple(d[j:j + length]))
-            else:
-                seq = tuple(n[j:j + length])
-            try:
-                result = ltuples[seq]
-                if seq not in matchlist:
-                    matchlist.append(seq)
-                matches += 1
-            except KeyError:
-                pass
-            total += 1
+        try:
+            _ = corpus_sequences[l][sequence]
+            if sequence not in match_sequences:
+                match_sequences.append(sequence)
+            matches += 1
+        except KeyError:
+            pass
 
-    logger.info('Num types of matches:', len(matchlist))
-
-    return matches / total
+        total += 1
 
 
+# https://github.com/Impro-Visor/sequence_gan
 # Harmonic Consistency (HC)
 # The harmonic consistency metric is based on the Impro-Visor (Keller 2018) note categorization,
 # represented visually by coloration, which measures the frequency of black, green, blue, and red notes.

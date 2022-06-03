@@ -8,7 +8,8 @@ import yaml
 
 from src.dataset import MelodyDataset
 from src.model.duration import DurationBase, DurationChord, DurationModel
-from model.time_step.time_step_model import TimeStepModel
+from src.model.time_step.time_step_model import TimeStepModel
+from src.evaluation import evaluate_model
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -222,3 +223,5 @@ if __name__ == "__main__":
         seed=seed,
         callback=callback
     )
+
+    evaluate_model(model, logger)

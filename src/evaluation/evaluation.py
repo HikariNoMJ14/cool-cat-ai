@@ -1,3 +1,4 @@
+import os.path
 import numpy as np
 import pandas as pd
 
@@ -6,10 +7,14 @@ from src.generator import DurationGenerator
 from src.utils import get_filepaths
 from src.evaluation import objective_metrics
 
+SEQUENCE_LENGTHS = [2, 3, 4, 5, 6, 7]
 EVALUATION_METRICS = ['PCHE1', 'PCHE4', 'PVF4', 'TS12', 'CPR2', 'DPR12', 'GPS', 'RV4', 'QR', 'HC-m']
 
+for l in SEQUENCE_LENGTHS:
+    EVALUATION_METRICS.append(f'RM{l}')
 
-def evaluate_melody(filepath):
+
+def evaluate_melody(filepath, corpus_sequences=None):
     df = pd.read_csv(filepath, index_col=0)
 
     df['measure'] = (df['ticks'] // 48).astype('int')
@@ -41,15 +46,25 @@ def evaluate_melody(filepath):
     qr = objective_metrics.calculate_QD(df)
     # HC
     hc = objective_metrics.calculate_HC(df[df['pitch'] >= 0])
-    # RN
-    #     rm = objective_metrics.calculate_RM(df)
 
-    return {
+    results = {
         'PCHE1': pe1, 'PCHE4': pe4, 'PVF4': pvf4, 'TS12': ts12,
         'CPR2': cpr2, 'DPR12': dpr12, 'GPS': gs, 'RV4': rv4,
-        'QR': qr, 'HC': hc,
-        #         'RM': rm
+        'QR': qr, 'HC': hc
     }
+
+    # RM
+    if corpus_sequences is not None:
+        for l in SEQUENCE_LENGTHS:
+            rm = objective_metrics.calculate_RM(
+                df,
+                corpus_sequences=corpus_sequences,
+                l=l
+            )
+
+            results[f'RM{l}'] = rm
+
+    return results
 
 
 def evaluate_model(model, logger, unseen=False):
@@ -63,6 +78,10 @@ def evaluate_model(model, logger, unseen=False):
         sample,
         logger
     )
+
+    corpus_sequences = {}
+    for l in SEQUENCE_LENGTHS:
+        corpus_sequences[l] = objective_metrics.calculate_corpus_sequences(model.dataset, l)
 
     original_filepaths = set([Melody(i, '1.2').song_name for i in get_filepaths('original')])
     seen_filepaths = set([Melody(i, '1.2').song_name for i in get_filepaths('improvised')])
@@ -87,6 +106,8 @@ def evaluate_model(model, logger, unseen=False):
     metrics_df = pd.DataFrame().from_dict(metrics).T
     metrics_df['HC-m'] = metrics_df['HC'].apply(np.mean)
 
+    metrics_df.to_csv(os.path.join(os.path.dirname(model.best_model_path), 'evaluation_seen.csv'))
+
     for metric in EVALUATION_METRICS:
         logger.info(f'{metric} - {metrics_df[metric].mean():5.2f} - {metrics_df[metric].std():5.2f}')
 
@@ -105,6 +126,8 @@ def evaluate_model(model, logger, unseen=False):
 
             metrics_df = pd.DataFrame().from_dict(metrics).T
             metrics_df['HC-m'] = metrics_df['HC'].apply(np.mean)
+
+            metrics_df.to_csv(os.path.join(os.path.dirname(model.best_model_path), 'evaluation_unseen.csv'))
 
             for metric in EVALUATION_METRICS:
                 logger.info(f'{metric} - {metrics_df[metric].mean():5.2f} - {metrics_df[metric].std():5.2f}')

@@ -26,6 +26,9 @@ class BaseModel(nn.Module):
         self.name = ''
         self.save_dir = os.path.join(src_path, 'results')
 
+        self.model_path = None
+        self.best_model_path = None
+
         self.dataset = dataset
         self.logger = logger
         self.save_path = save_path
@@ -136,7 +139,7 @@ class BaseModel(nn.Module):
         np.random.seed(seed)
 
         total_start_time = time.time()
-        best_valid_accuracy = None
+        best_valid_loss = None
         training_results = []
 
         try:
@@ -191,17 +194,20 @@ class BaseModel(nn.Module):
                     epoch_results['valid_' + name] = value
                 training_results.append(epoch_results)
 
-                # Save the model if the validation loss is the best we've seen so far.
-                average_valid_accuracy = valid_metrics['pitch_top1']
-                if not best_valid_accuracy or average_valid_accuracy < best_valid_accuracy:
-                    with open(checkpoint_path.replace('.pt', '_best_val.pt'), 'wb') as f:
+                # Save the model if the validation loss is the best we've seen so far
+                if not best_valid_loss or valid_loss < best_valid_loss:
+                    self.logger.info('Found new best loss')
+
+                    model_path = checkpoint_path.replace('.pt', '_best_val.pt')
+                    with open(model_path, 'wb') as f:
                         torch.save(self, f)
-                        best_valid_accuracy = average_valid_accuracy
+                        best_valid_loss = valid_loss
+                        self.best_model_path = model_path
 
                 if epoch % 50 == 0:
                     with open(checkpoint_path.replace('.pt', f'_e{epoch}.pt'), 'wb') as f:
                         torch.save(self, f)
-                        best_valid_accuracy = average_valid_accuracy
+                        best_valid_loss = valid_loss
 
                 scheduler.step()
 
@@ -217,6 +223,7 @@ class BaseModel(nn.Module):
 
             with open(checkpoint_path, 'wb') as f:
                 torch.save(self, f)
+                self.model_path = checkpoint_path
 
         except KeyboardInterrupt:
             self.logger.info('--- Training stopped ---')
@@ -234,6 +241,7 @@ class BaseModel(nn.Module):
 
                 with open(checkpoint_path, 'wb') as f:
                     torch.save(self, f)
+                    self.model_path = checkpoint_path
 
     def do_train(self, dataset, batch_size, optimizer, num_batches=None):
         self.train()
