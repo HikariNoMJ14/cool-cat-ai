@@ -2,7 +2,8 @@ import os
 from glob import glob
 import re
 import shutil
-from string_similarity import similar
+
+from src.utils import similar
 
 
 def phase_1():

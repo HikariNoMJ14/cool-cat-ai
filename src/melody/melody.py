@@ -1,4 +1,5 @@
 import os
+import json
 
 import music21
 from music21 import converter
@@ -13,10 +14,10 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from src.ezchord import Chord
-from src.utils import is_weakly_polyphonic, is_strongly_polyphonic, \
-    notes_to_midi, notes_and_chord_to_midi, flatten_chord_progression, filepath_to_song_name
-from src.objective_metrics import replace_enharmonic
+from src.utils import notes_to_midi, notes_and_chord_to_midi, \
+    flatten_chord_progression, filepath_to_song_name, replace_enharmonic
+from src.utils.ezchord import Chord
+from src.utils.constants import OCTAVE_SEMITONES
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
@@ -52,7 +53,7 @@ class Melody:
         ]
     }
 
-    def __init__(self, filepath, version):
+    def __init__(self, filepath, version='1.2', chord_encoding_type='extended', chord_extension_count=7):
         self.mido_obj = None
         self.music21_obj = None
         self.key = None
@@ -90,43 +91,26 @@ class Melody:
         self.split_melody_folder = f'{src_path}/data/split_melody/v{version}'
         self.finalised_melody_folder = f'{src_path}/data/finalised'
 
-        self.folder = filepath.split('/')[-3]
-        self.source = filepath.split('/')[-2]
-        self.filepath = filepath
-        self.filename = os.path.basename(filepath)
-        self.aligned_filepath = filepath.replace(self.folder, 'aligned_melodies')
-        self.song_name = filepath_to_song_name(filepath)
+        if filepath is not None:
+            self.folder = filepath.split('/')[-3]
+            self.source = filepath.split('/')[-2]
+            self.filepath = filepath
+            self.filename = os.path.basename(filepath)
+            self.aligned_filepath = filepath.replace(self.folder, 'aligned_melodies')
+            self.song_name = filepath_to_song_name(filepath)
 
-        self.original = self.source in self.original_sources
+            self.original = self.source in self.original_sources
 
-    @staticmethod
-    def remove_weak_polyphony(melody):
-        new_melody = melody.copy()
+        self.chord_encoding_type = chord_encoding_type
+        self.chord_extension_count = chord_extension_count
 
-        overlap = (new_melody['end_ticks'] - new_melody['ticks'].shift(-1)).clip(0, None)
+        chord_mapping_filepath = os.path.join(
+            src_path, 'data', 'tensor_dataset',
+            'chords', f'{self.chord_encoding_type}_{self.chord_extension_count}.json')
 
-        # skip last row as 'shift' messes it up
-        new_melody.iloc[:-1, new_melody.columns.get_loc('duration')] -= overlap.iloc[:-1]
-        new_melody.iloc[:-1, new_melody.columns.get_loc('end_ticks')] -= overlap.iloc[:-1]
-
-        if is_weakly_polyphonic(new_melody):
-            raise Exception('Error!!! Weak polyphony not removed correctly')
-
-        return new_melody
-
-    @staticmethod
-    def remove_strong_polyphony(melody):
-        new_melody = melody.copy()
-
-        new_melody = new_melody\
-            .sort_values('pitch', ascending=False)\
-            .drop_duplicates('ticks')\
-            .sort_values('ticks')
-
-        if is_strongly_polyphonic(new_melody):
-            raise Exception('Error!!! Strong polyphony not removed correctly')
-
-        return new_melody
+        # TODO pass chord encoding type
+        with open(chord_mapping_filepath) as fp:
+            self.chord_mapping = json.load(fp)
 
     @no_errors
     def setup(self):
@@ -459,6 +443,65 @@ class Melody:
         #     return 0.5
         else:
             return 0
+
+    @staticmethod
+    def extended_chord_encoding(chord_pitches, chord_notes_count):
+        upper_extension_index = -3  # TODO choice for which extensions to add is a bit random
+
+        # If 13th chord, remove 11th
+        if len(chord_pitches) == 8:
+            del chord_pitches[-2]
+
+        # Remove extensions exceeding the count
+        while len(chord_pitches) > chord_notes_count:
+            del chord_pitches[-1]
+
+        # Add extensions until we reach the count
+        while True:
+            if len(chord_pitches) == chord_notes_count:
+                return np.array(sorted(chord_pitches))
+
+            upper_extension = chord_pitches[upper_extension_index] + OCTAVE_SEMITONES
+            chord_pitches.append(upper_extension)
+
+    @staticmethod
+    def fixed_chord_encoding(chord_pitches, chord_notes_count):
+        # If 13th chord, remove 11th
+        if len(chord_pitches) == 8:
+            del chord_pitches[-2]
+
+        # Remove extensions exceeding the count
+        while len(chord_pitches) > chord_notes_count:
+            del chord_pitches[-1]
+
+        # Add rests until we reach the count
+        while True:
+            if len(chord_pitches) == chord_notes_count:
+                return np.array(sorted(chord_pitches))
+
+            chord_pitches.append(np.nan)
+
+    @staticmethod
+    def compressed_chord_encoding(chord_pitches):
+        encoded_chord_pitches = []
+        chord_pitch_classes = set([chord_pitch % 12 for chord_pitch in chord_pitches])
+
+        for pitch_class in range(OCTAVE_SEMITONES):
+            encoded_chord_pitches.append(
+                60 + pitch_class if pitch_class in chord_pitch_classes else np.nan
+            )
+
+        return encoded_chord_pitches
+
+    def transpose_chord(self, chord_name, transpose_interval):
+        chord_pitches = self.chord_mapping[chord_name]
+
+        if self.chord_encoding_type == 'compressed':
+            chord_pitches = chord_pitches[-transpose_interval:] + chord_pitches[:-transpose_interval]
+
+        return [chord_pitch + transpose_interval
+                if chord_pitch is not None else np.nan
+                for chord_pitch in chord_pitches]
 
     def save_split_melody(self, repetition, quantized, chords=True):
         split_melody_df = self.split_note_info[repetition-1]

@@ -1,20 +1,40 @@
 mlflow:
-  experiment_name: mono_time_step_encoding
-  run_name: default_run
+  experiment_name: duration_base
+  run_name: test metadata
+
+#  experiment_name: none
+#  run_name: default
 
 dataset:
-  encoding_type: timestep
+  encoding_type: duration_base
   polyphonic: False
   chord_encoding_type: extended
   chord_extension_count: 7
-  transpose_mode: none
-  sequence_size: 96
+  duration_correction: 0
+  transpose_mode: all
+  sequence_size: 41
+
+
+#Learning rate 5e−1
+#Weight decay 1e−6
+#Dropout 0
+#Number of epochs 500
+#Batch size 256
+#Sequence Length 100
 
 model:
+  use_padding_idx: False
+  start_pitch_symbol: 129
+  end_pitch_symbol: 129
+  start_attack_symbol: -2
+  end_attack_symbol: -1
+  start_duration_symbol: 0
+  end_duration_symbol: 0
+
   offset_size: 48
-  pitch_size: 131
+  pitch_size: 130
   attack_size: 1
-  metadata_size: 0
+  metadata_size: 120
 
   embedding_size: 256
   lstm_num_layers: 3
@@ -22,20 +42,23 @@ model:
   nn_hidden_size: 128
   nn_output_size: 32
 
-  embedding_dropout_rate: 0.5
-  nn_dropout_rate: 0.5
-  lstm_dropout_rate: 0.5
+  embedding_dropout_rate: 0
+  nn_dropout_rate: 0
+  lstm_dropout_rate: 0
 
   normalize: False
   gradient_clipping: 0.25
 
-  pitch_loss_weight: 0.5
-  attack_loss_weight: 0.5
+  pitch_loss_weight: 0.6
+  attack_loss_weight: 0.4
+  duration_loss_weight: 0.4
 
 training:
+  num_batches: 20000
   batch_size: 64
-  num_epochs: 35
+  num_epochs: 2
   seed: 1234567890
   learning_rate: 0.5
   momentum: 0.9
   weight_decay: 1e-6
+

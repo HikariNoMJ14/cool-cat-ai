@@ -6,8 +6,10 @@ import torch
 import mlflow
 import yaml
 
-from src.dataset import SplitDataset
-from src.model import MonoTimeStepModel
+from src.dataset import MelodyDataset
+from src.model.duration import DurationBase, DurationChord, DurationModel
+from src.model.time_step.time_step_model import TimeStepModel
+from src.evaluation import evaluate_model
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -43,34 +45,61 @@ if __name__ == "__main__":
     polyphonic = bool(dataset_config['polyphonic'])
     chord_encoding_type = dataset_config['chord_encoding_type']
     chord_extension_count = int(dataset_config['chord_extension_count'])
+    duration_correction = int(dataset_config['duration_correction'])
     transpose_mode = dataset_config['transpose_mode']
     sequence_size = int(dataset_config['sequence_size'])
 
     model_config = config['model']
+    use_padding_idx = bool(model_config['use_padding_idx'])
+    start_pitch_symbol = int(model_config['start_pitch_symbol'])
+    end_pitch_symbol = int(model_config['end_pitch_symbol'])
+    start_duration_symbol = int(model_config['start_duration_symbol'])
+    end_duration_symbol = int(model_config['end_duration_symbol'])
+
     offset_size = int(model_config['offset_size'])
     pitch_size = int(model_config['pitch_size'])
     attack_size = int(model_config['attack_size'])
     metadata_size = int(model_config['metadata_size'])
+
     embedding_size = int(model_config['embedding_size'])
     lstm_num_layers = int(model_config['lstm_num_layers'])
     lstm_hidden_size = int(model_config['lstm_hidden_size'])
     nn_hidden_size = int(model_config['nn_hidden_size'])
     nn_output_size = int(model_config['nn_output_size'])
+
     embedding_dropout_rate = float(model_config['embedding_dropout_rate'])
     lstm_dropout_rate = float(model_config['lstm_dropout_rate'])
     nn_dropout_rate = float(model_config['nn_dropout_rate'])
+
     normalize = bool(model_config['normalize'])
     gradient_clipping = float(model_config['gradient_clipping'])
+
     pitch_loss_weight = float(model_config['pitch_loss_weight'])
     attack_loss_weight = float(model_config['attack_loss_weight'])
+    duration_loss_weight = float(model_config['duration_loss_weight'])
 
     training_config = config['training']
+    num_batches = int(training_config['num_batches'])
     batch_size = int(training_config['batch_size'])
     num_epochs = int(training_config['num_epochs'])
     seed = int(training_config['seed'])
     learning_rate = float(training_config['learning_rate'])
     momentum = float(training_config['momentum'])
     weight_decay = float(training_config['weight_decay'])
+
+    if chord_encoding_type == 'compressed' and chord_extension_count != 12:
+        raise Exception(f"Chord extension count has to be 12 for encoding type 'compressed'")
+
+    if encoding_type == 'timestep':
+        model_class = TimeStepModel
+    elif encoding_type == 'duration_base':
+        model_class = DurationBase
+    elif encoding_type == 'duration_chord':
+        model_class = DurationChord
+    elif encoding_type == 'duration':
+        model_class = DurationModel
+    else:
+        raise Exception(f'Unknown encoding type: {encoding_type}')
 
     try:
         logger.debug(f'Create new experiment: {experiment_name}')
@@ -88,9 +117,15 @@ if __name__ == "__main__":
     mlflow.log_param('polyphonic', polyphonic)
     mlflow.log_param('chord_encoding_type', chord_encoding_type)
     mlflow.log_param('chord_extension_count', chord_extension_count)
+    mlflow.log_param('duration_correction', duration_correction)
     mlflow.log_param('transpose_mode', transpose_mode)
     mlflow.log_param('sequence_size', sequence_size)
 
+    mlflow.log_param('use_padding_idx', use_padding_idx)
+    mlflow.log_param('start_pitch_symbol', start_pitch_symbol)
+    mlflow.log_param('end_pitch_symbol', end_pitch_symbol)
+    mlflow.log_param('start_duration_symbol', start_duration_symbol)
+    mlflow.log_param('end_duration_symbol', end_duration_symbol)
     mlflow.log_param('offset_size', offset_size)
     mlflow.log_param('pitch_size', pitch_size)
     mlflow.log_param('attack_size', attack_size)
@@ -107,7 +142,9 @@ if __name__ == "__main__":
     mlflow.log_param('gradient_clipping', gradient_clipping)
     mlflow.log_param('pitch_loss_weight', pitch_loss_weight)
     mlflow.log_param('attack_loss_weight', attack_loss_weight)
+    mlflow.log_param('duration_loss_weight', duration_loss_weight)
 
+    mlflow.log_param('num_batches', num_batches)
     mlflow.log_param('batch_size', batch_size)
     mlflow.log_param('num_epochs', num_epochs)
     mlflow.log_param('seed', seed)
@@ -115,25 +152,30 @@ if __name__ == "__main__":
     mlflow.log_param('momentum', momentum)
     mlflow.log_param('weight_decay', weight_decay)
 
-    dataset = SplitDataset(
+    melody_dataset = MelodyDataset(
         encoding_type=encoding_type,
         polyphonic=polyphonic,
         chord_encoding_type=chord_encoding_type,
         chord_extension_count=chord_extension_count,
+        duration_correction=duration_correction,
         transpose_mode=transpose_mode,
-        sequence_size=sequence_size
+        logger=logger
     )
-    dataset.load()
+    melody_dataset.load()
 
-    print(dataset.tensor_dataset)
+    mlflow.log_param('dataset', melody_dataset.name)
+    mlflow.log_param('num_examples', len(melody_dataset.tensor_dataset))
 
-    mlflow.log_param('dataset', dataset.name)
-    mlflow.log_param('num_examples', len(dataset))
-
-    model = MonoTimeStepModel(
-        dataset=dataset,
+    model = model_class(
+        dataset=melody_dataset,
         logger=logger,
         save_path=run.info.artifact_uri,
+        sequence_size=sequence_size,
+        use_padding_idx=use_padding_idx,
+        start_pitch_symbol=start_pitch_symbol,
+        end_pitch_symbol=end_pitch_symbol,
+        start_duration_symbol=start_duration_symbol,
+        end_duration_symbol=end_duration_symbol,
         offset_size=offset_size,
         pitch_size=pitch_size,
         attack_size=attack_size,
@@ -149,7 +191,8 @@ if __name__ == "__main__":
         normalize=normalize,
         gradient_clipping=gradient_clipping,
         pitch_loss_weight=pitch_loss_weight,
-        attack_loss_weight=attack_loss_weight
+        attack_loss_weight=attack_loss_weight,
+        duration_loss_weight=duration_loss_weight
     )
 
     optimizer = torch.optim.SGD(
@@ -161,7 +204,7 @@ if __name__ == "__main__":
     )
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
         optimizer,
-        milestones=[300, 400, 450],
+        milestones=[10, 20, 30],
         gamma=0.5
     )
 
@@ -172,6 +215,7 @@ if __name__ == "__main__":
         mlflow.end_run(status)
 
     model.train_and_eval(
+        num_batches=num_batches,
         batch_size=batch_size,
         num_epochs=num_epochs,
         optimizer=optimizer,
@@ -179,3 +223,5 @@ if __name__ == "__main__":
         seed=seed,
         callback=callback
     )
+
+    evaluate_model(model, logger)
