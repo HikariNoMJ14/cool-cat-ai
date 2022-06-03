@@ -1,9 +1,11 @@
 import os
+import re
 from glob import glob
 from datetime import datetime
 
 import music21
 import numpy as np
+import pandas as pd
 import pickle
 import torch
 from torch.utils.data import ConcatDataset
@@ -13,11 +15,12 @@ from src.utils import get_chord_progressions, get_filepaths, get_original_filepa
 from src.utils.constants import OCTAVE_SEMITONES
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
-src_path = os.path.join(dir_path, '..', '..')
+src_path = os.path.join(dir_path, '../../data', '..')
 
 
 class MelodyDataset:
     VERSION = '1.2'
+    METADATA_COUNT = 1
 
     def __init__(self,
                  encoding_type,
@@ -66,6 +69,8 @@ class MelodyDataset:
                     f'chord_{self.chord_encoding_type}_{self.chord_extension_count}'
 
         self.improvised_filepaths = get_filepaths('improvised')
+
+        self.metadata = pd.read_csv(os.path.join(src_path, 'data', 'finalised', 'metadata.csv'), index_col=0)
 
         self.logger = logger
 
@@ -122,6 +127,19 @@ class MelodyDataset:
             generator=torch.Generator().manual_seed(seed)
         )
 
+    def get_metadata(self, melody):
+
+        metadata = self.metadata[
+            (self.metadata['song_name'] == melody.song_name) &
+            (self.metadata['source'] == melody.source) &
+            (self.metadata['filename'] == re.sub(' -[0-9,o]*-', '', melody.filename))
+        ]
+
+        if len(metadata) == 1:
+            return metadata.iloc[0, -self.METADATA_COUNT:].values.astype(int)
+        else:
+            print('Problem with metadata')
+
     # TODO also save song info to cross-reference songs and tensors
     def save(self):
         out_filename = f'{datetime.now().strftime("%Y_%m_%d_%H%M%S")}_' + self.name
@@ -174,6 +192,8 @@ class MelodyDataset:
             melody.encode(improvised_filepath, original_filepath)
             melody.save_encoded()
 
+            metadata = self.get_metadata(melody)
+
             if self.transpose_mode == 'c':
                 transpose_interval = self.find_interval_to_c(melody)
                 transpose_intervals = [transpose_interval]
@@ -186,7 +206,10 @@ class MelodyDataset:
                 if len(transpose_intervals) > 1:
                     self.logger.debug(f'Transpose Interval: {transpose_interval}')
 
-                melody_tensor = melody.to_tensor(transpose_interval)
+                melody_tensor = melody.to_tensor(
+                    transpose_interval,
+                    metadata
+                )
 
                 tensor_dataset.append(melody_tensor)
 

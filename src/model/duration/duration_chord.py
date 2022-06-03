@@ -21,7 +21,8 @@ class DurationChord(DurationBase, ChordModel):
         'offset': 2,
         'pitch': 3,
         'duration': 4,
-        'chord_pitches_start': 5
+        'metadata': 5,
+        'chord_pitches_start': 6
     }
 
     FEATURES = {
@@ -29,9 +30,9 @@ class DurationChord(DurationBase, ChordModel):
             'offset',
             'pitch', 'duration'
         ],
-        # TODO Add metadata
         'present': [
-            'offset'
+            'offset',
+            'metadata'
         ]
     }
 
@@ -71,7 +72,7 @@ class DurationChord(DurationBase, ChordModel):
         #  metadata +
         #  chord_pitch * number_of_pitches
         present_nn_input_size = self.embedding_size + \
-                                self.metadata_size + \
+                                self.embedding_size + \
                                 self.embedding_size * self.chord_extension_count
 
         self.logger.debug(f'Model present LSTM input size: {present_nn_input_size}')
@@ -82,7 +83,7 @@ class DurationChord(DurationBase, ChordModel):
             nn.Dropout(self.nn_dropout_rate),
             nn.Linear(self.nn_hidden_size, self.nn_output_size),
             nn.ReLU(),
-            nn.Dropout(self.nn_dropout_rate)  # TODO check if performance degrades with many epochs
+            nn.Dropout(self.nn_dropout_rate)
         )
 
         merge_nn_input_size = self.lstm_hidden_size + self.nn_output_size
@@ -130,16 +131,19 @@ class DurationChord(DurationBase, ChordModel):
 
     def prepare_present_nn_input(self, present):
         # Extract features from present tensor
-        present_offsets = self.extract_features(present, 'offset', self.TENSOR_IDX_MAPPING['offset'] - 2)  # TODO fix
+        present_offsets = self.extract_features(present, 'offset', 0)  # TODO fix
+        present_metadata = self.extract_features(present, 'metadata', 2)
         present_chord_pitches = self.extract_chords(present, (1, 8))
 
         # Encode present offsets and pitches
         present_offset_embedding = self.offset_encoder(present_offsets)
+        present_metadata_embedding = self.metadata_encoder(present_metadata)
 
         present_chord_pitches_embedding = self.encode_chord_pitches(present_chord_pitches)
 
         return torch.cat([
             present_offset_embedding,
+            present_metadata_embedding,
             present_chord_pitches_embedding
         ], 2)
 
@@ -303,7 +307,7 @@ class DurationChord(DurationBase, ChordModel):
 
             # TODO use chord for corresponding offset?
             right_padded_chord_pitches = torch.from_numpy(
-                np.array(self.end_pitch_symbol)
+                np.array([self.end_pitch_symbol])
             ).long().clone().repeat(end_idx - length, self.chord_extension_count).transpose(0, 1)
 
             padded_offsets.append(right_padded_offsets)

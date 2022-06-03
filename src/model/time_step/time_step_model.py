@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from src.model.base import BaseModel
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
-src_path = os.path.join(dir_path, '..', '..', '..')
+src_path = os.path.join(dir_path, '../../../data', '..', '..')
 
 
 class TimeStepModel(BaseModel):
@@ -28,10 +28,10 @@ class TimeStepModel(BaseModel):
             'improvised_pitch', 'improvised_attack',
             'original_pitch', 'original_attack'
         ],
-        # TODO Add metadata
         'present': [
             'offset',
-            'original_pitch', 'original_attack'
+            'original_pitch', 'original_attack',
+            'metadata'
         ],
         'future': [
             'offset',
@@ -89,7 +89,7 @@ class TimeStepModel(BaseModel):
         #  chord_pitch * number_of_pitches
         present_nn_input_size = self.embedding_size + \
                                 self.embedding_size + self.attack_size + \
-                                self.metadata_size + \
+                                self.embedding_size + \
                                 self.embedding_size * self.chord_extension_count
 
         self.logger.debug(f'Model present LSTM input size: {present_nn_input_size}')

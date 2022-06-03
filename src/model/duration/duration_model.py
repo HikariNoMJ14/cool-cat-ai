@@ -20,7 +20,8 @@ class DurationModel(DurationChord):
         'offset': 2,
         'pitch': 3,
         'duration': 4,
-        'chord_pitches_start': 5
+        'metadata': 5,
+        'chord_pitches_start': 6
     }
 
     FEATURES = {
@@ -32,9 +33,9 @@ class DurationModel(DurationChord):
             'offset',
             'pitch', 'duration'
         ],
-        # TODO Add metadata
         'present': [
-            'offset'
+            'offset',
+            'metadata'
         ],
         'future': [
             'offset',
@@ -86,7 +87,7 @@ class DurationModel(DurationChord):
         #  metadata +
         #  chord_pitch * number_of_pitches
         present_nn_input_size = self.embedding_size + \
-                                self.metadata_size + \
+                                self.embedding_size + \
                                 self.embedding_size * self.chord_extension_count
 
         self.logger.debug(f'Model present LSTM input size: {present_nn_input_size}')
@@ -97,7 +98,7 @@ class DurationModel(DurationChord):
             nn.Dropout(self.nn_dropout_rate),
             nn.Linear(self.nn_hidden_size, self.nn_output_size),
             nn.ReLU(),
-            nn.Dropout(self.nn_dropout_rate)  # TODO check if performance degrades with many epochs
+            nn.Dropout(self.nn_dropout_rate)
         )
 
         #  offset +
@@ -483,7 +484,7 @@ class DurationModel(DurationChord):
 
             # TODO use chord for corresponding offset?
             right_padded_chord_pitches = torch.from_numpy(
-                np.array(self.end_pitch_symbol)
+                np.array([self.end_pitch_symbol])
             ).long().clone().repeat(end_idx - length, self.chord_extension_count).transpose(0, 1)
 
             padded_offsets.append(right_padded_offsets)

@@ -20,12 +20,14 @@ class BaseModel(nn.Module):
     VOLATILE = False
     LOG_INTERVAL = 500
 
+    METADATA_SYMBOL = -1
+    METADATA_IDX_COUNT = 1
+
     def __init__(self, dataset=None, logger=None, save_path=os.path.join(src_path, 'results'), **kwargs):
         super(BaseModel, self).__init__()
 
         self.name = ''
         self.save_dir = os.path.join(src_path, 'results')
-
         self.model_path = None
         self.best_model_path = None
 
@@ -85,6 +87,16 @@ class BaseModel(nn.Module):
                 self.embedding_size,
                 scale_grad_by_freq=True,
                 padding_idx=self.start_pitch_symbol if kwargs['use_padding_idx'] else None
+            ),
+            nn.Dropout(self.embedding_dropout_rate)
+        )
+
+        self.metadata_encoder = nn.Sequential(
+            nn.Embedding(
+                self.metadata_size,
+                self.embedding_size,
+                scale_grad_by_freq=True,
+                padding_idx=None
             ),
             nn.Dropout(self.embedding_dropout_rate)
         )

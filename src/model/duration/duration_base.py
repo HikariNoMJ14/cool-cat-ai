@@ -20,13 +20,18 @@ class DurationBase(BaseModel):
         'offset': 2,
         'pitch': 3,
         'duration': 4,
-        'chord_pitches_start': 5
+        'metadata': 5,
+        'chord_pitches_start': 9
     }
 
     FEATURES = {
         'past_improvised': [
             'offset',
             'pitch', 'duration'
+        ],
+        'present': [
+            'offset',
+            'metadata'
         ]
     }
 
@@ -52,6 +57,11 @@ class DurationBase(BaseModel):
         # Set model parameters
         self.start_duration_symbol = kwargs['start_duration_symbol']
         self.end_duration_symbol = kwargs['end_duration_symbol']
+
+        self.metadata_tensor_idx = list(range(
+            self.TENSOR_IDX_MAPPING['metadata'],
+            self.TENSOR_IDX_MAPPING['metadata'] + self.METADATA_IDX_COUNT
+        ))
 
         self.setup_duration_mapping()
 
@@ -93,7 +103,23 @@ class DurationBase(BaseModel):
             batch_first=True
         )
 
-        merge_nn_input_size = self.lstm_hidden_size
+        #  offset +
+        #  metadata
+        present_nn_input_size = self.embedding_size + \
+                                self.embedding_size
+
+        self.logger.debug(f'Model present LSTM input size: {present_nn_input_size}')
+
+        self.present_nn = nn.Sequential(
+            nn.Linear(present_nn_input_size, self.nn_hidden_size),
+            nn.ReLU(),
+            nn.Dropout(self.nn_dropout_rate),
+            nn.Linear(self.nn_hidden_size, self.nn_output_size),
+            nn.ReLU(),
+            nn.Dropout(self.nn_dropout_rate)
+        )
+
+        merge_nn_input_size = self.lstm_hidden_size + self.nn_output_size
         merge_nn_output_size = self.embedding_size + self.duration_size
 
         self.merge_nn = nn.Sequential(
@@ -133,9 +159,9 @@ class DurationBase(BaseModel):
 
     def prepare_past_lstm_input(self, past):
         # Extract features from past tensor
-        past_offsets = self.extract_features(past, 'offset', self.TENSOR_IDX_MAPPING['offset'] - 2)  # TODO fix
-        past_pitches = self.extract_features(past, 'pitch', self.TENSOR_IDX_MAPPING['pitch'] - 2)
-        past_durations = self.extract_features(past, 'duration', self.TENSOR_IDX_MAPPING['duration'] - 2)
+        past_offsets = self.extract_features(past, 'offset', 0)  # TODO fix
+        past_pitches = self.extract_features(past, 'pitch', 1)
+        past_durations = self.extract_features(past, 'duration', 2)
         past_durations = self.convert_durations_to_ids(past_durations)
 
         assert past_offsets.max() <= self.offset_size
@@ -152,12 +178,29 @@ class DurationBase(BaseModel):
             past_pitch_embedding, past_duration_embedding
         ], 2)
 
+    def prepare_present_nn_input(self, present):
+        # Extract features from present tensor
+        present_offsets = self.extract_features(present, 'offset', 0)  # TODO fix
+        present_metadata = self.extract_features(present, 'metadata', 1)
+
+        # Encode present offsets and pitches
+        present_offset_embedding = self.offset_encoder(present_offsets)
+        present_metadata_embedding = self.metadata_encoder(present_metadata)
+
+        return torch.cat([
+            present_offset_embedding,
+            present_metadata_embedding
+        ], 2)
+
     def forward(self, features):
+        past_improvised = features[0]
+        present = features[1]
+
         self.cuda()
 
         # Past Improvised LSTM
-        past_improvised_lstm_input = self.prepare_past_lstm_input(features)
-        past_improvised_lstm_hidden = self.init_hidden(batch_size=features.size(0))
+        past_improvised_lstm_input = self.prepare_past_lstm_input(past_improvised)
+        past_improvised_lstm_hidden = self.init_hidden(batch_size=past_improvised.size(0))
         past_improvised_lstm_output, \
         past_improvised_lstm_hidden = self.past_improvised_lstm(
             past_improvised_lstm_input,
@@ -165,9 +208,15 @@ class DurationBase(BaseModel):
         )
         past_improvised_lstm_output = past_improvised_lstm_output[:, -1, :]
 
+        # Present NN
+        present_nn_input = self.prepare_present_nn_input(present)
+        present_nn_input = present_nn_input.view(present.size(0), -1)
+        present_nn_output = self.present_nn(present_nn_input)
+
         # Merge NN
         merge_nn_input = torch.cat([
-            past_improvised_lstm_output
+            past_improvised_lstm_output,
+            present_nn_output
         ], 1)
         merge_nn_output = self.merge_nn(merge_nn_input)
 
@@ -194,11 +243,20 @@ class DurationBase(BaseModel):
 
         past_improvised_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
                                           for feature in self.FEATURES['past_improvised']]
-        # past_improvised_tensor_indices += self.chord_tensor_idx
         past_improvised_tensor_indices = range(3)  # TODO fix!!!
         past_improvised = self.mask_entry(
             improvised_batch[:, :middle_tick, :],
             past_improvised_tensor_indices,
+            dim=2
+        )
+
+        # Remove improvised pitch and duration from present tick
+        present_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
+                                  for feature in self.FEATURES['present']]
+        present_tensor_indices = [0] + list(range(3, 10))  # TODO fix!!!
+        present = self.mask_entry(
+            batch[:, middle_tick:middle_tick + 1, :],
+            present_tensor_indices,
             dim=2
         )
 
@@ -219,7 +277,7 @@ class DurationBase(BaseModel):
         if self.start_pitch_symbol != self.start_pitch_symbol:
             assert past_improvised[:, :, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
 
-        return past_improvised, label
+        return (past_improvised, present), label
 
     def get_batch(self, dataset, batch_size):
         improvised_batch = []
@@ -248,11 +306,15 @@ class DurationBase(BaseModel):
         start_idx = index
         end_idx = index + self.sequence_size
 
+        metadata_start = self.TENSOR_IDX_MAPPING['metadata']
+        metadata_end = self.TENSOR_IDX_MAPPING['metadata'] + self.METADATA_IDX_COUNT
+
         length = example.size(0)
 
         padded_offsets = []
         padded_pitches = []
         padded_durations = []
+        padded_metadata = []
 
         slice_start = start_idx if start_idx > 0 else 0
         slice_end = end_idx if end_idx < length else length
@@ -262,6 +324,7 @@ class DurationBase(BaseModel):
         center_padded_offsets = sliced_data[None, :, self.TENSOR_IDX_MAPPING['offset']]
         center_padded_pitches = sliced_data[None, :, self.TENSOR_IDX_MAPPING['pitch']]
         center_padded_durations = sliced_data[None, :, self.TENSOR_IDX_MAPPING['duration']]
+        center_padded_metadata = sliced_data[:, metadata_start:metadata_end].transpose(0, 1)
 
         if start_idx < 0:
             first_offset = int(center_padded_offsets[:, 0])
@@ -277,13 +340,19 @@ class DurationBase(BaseModel):
                 np.array([self.start_duration_symbol])
             ).long().clone().repeat(-start_idx, 1).transpose(0, 1)
 
+            left_padded_metadata = torch.from_numpy(
+                np.array(self.METADATA_SYMBOL)
+            ).long().clone().repeat(-start_idx, self.METADATA_IDX_COUNT).transpose(0, 1)
+
             padded_offsets.append(left_padded_offsets)
             padded_pitches.append(left_padded_pitches)
             padded_durations.append(left_padded_durations)
+            padded_metadata.append(left_padded_metadata)
 
         padded_offsets.append(center_padded_offsets)
         padded_pitches.append(center_padded_pitches)
         padded_durations.append(center_padded_durations)
+        padded_metadata.append(center_padded_metadata)
 
         # Add right padding if necessary
         if end_idx > length:
@@ -300,18 +369,25 @@ class DurationBase(BaseModel):
                 np.array([self.end_duration_symbol])
             ).long().clone().repeat(end_idx - length, 1).transpose(0, 1)
 
+            right_padded_metadata = torch.from_numpy(
+                np.array(self.METADATA_SYMBOL)
+            ).long().clone().repeat(end_idx - length, self.METADATA_IDX_COUNT).transpose(0, 1)
+
             padded_offsets.append(right_padded_offsets)
             padded_pitches.append(right_padding_pitches)
             padded_durations.append(right_padded_durations)
+            padded_metadata.append(right_padded_metadata)
 
         padded_offsets = torch.cat(padded_offsets, 1)
         padded_pitches = torch.cat(padded_pitches, 1)
         padded_durations = torch.cat(padded_durations, 1)
+        padded_metadata = torch.cat(padded_metadata, 1)
 
         padded_example = torch.cat([
             padded_offsets,
             padded_pitches,
-            padded_durations
+            padded_durations,
+            padded_metadata
         ], 0).transpose(0, 1).cuda()
 
         return padded_example[None, :, :]

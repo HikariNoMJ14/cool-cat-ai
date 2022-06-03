@@ -12,7 +12,7 @@ from src.utils.ezchord import Chord
 from src.utils.constants import OCTAVE_SEMITONES, REST_SYMBOL
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
-src_path = os.path.join(dir_path, '..', '..')
+src_path = os.path.join(dir_path, '../../data', '..')
 
 
 class DurationMelody(Melody):
@@ -166,7 +166,7 @@ class DurationMelody(Melody):
             upper_extension = chord_pitches[upper_extension_index] + OCTAVE_SEMITONES
             chord_pitches.append(upper_extension)
 
-    def to_tensor(self, transpose_interval):
+    def to_tensor(self, transpose_interval, metadata):
         improvised_encoded = self.encoded[self.encoded['type'] == 'improvised']
 
         improvised_flag = torch.from_numpy(
@@ -189,6 +189,10 @@ class DurationMelody(Melody):
             np.array(improvised_encoded[['duration']])
         ).long().clone().transpose(0, 1)
 
+        improvised_metadata = torch.from_numpy(
+            np.tile(metadata, (improvised_encoded.shape[0], 1))
+        ).long().clone().transpose(0, 1)
+
         improvised_chord_pitches = torch.from_numpy(
             np.stack(
                 improvised_encoded['chord_name'].apply(
@@ -203,6 +207,7 @@ class DurationMelody(Melody):
             improvised_offsets,
             improvised_pitches,
             improvised_duration,
+            improvised_metadata,
             improvised_chord_pitches
         ], 0).transpose(0, 1)
 
@@ -228,6 +233,10 @@ class DurationMelody(Melody):
             np.array([original_encoded['duration']])
         ).long().clone()
 
+        original_metadata = torch.from_numpy(
+            np.tile(metadata, (original_encoded.shape[0], 1))
+        ).long().clone().transpose(0, 1)
+
         original_chord_pitches = torch.from_numpy(
             np.stack(
                 original_encoded['chord_name'].apply(
@@ -242,6 +251,7 @@ class DurationMelody(Melody):
             original_offsets,
             original_pitches,
             original_duration,
+            original_metadata,
             original_chord_pitches
         ], 0).transpose(0, 1)
 
