@@ -167,14 +167,14 @@ class BaseModel(nn.Module):
 
                 self.logger.info(f'--- Epoch {epoch} ---')
 
-                train_loss, train_metrics = self.do_train(
+                train_loss, train_metrics = self._train(
                     dataset=train_dataset,
                     optimizer=optimizer,
                     batch_size=batch_size,
                     num_batches=num_batches
                 )
 
-                valid_loss, valid_metrics = self.do_evaluate(
+                valid_loss, valid_metrics = self._evaluate(
                     dataset=val_dataset,
                     batch_size=batch_size,
                     num_batches=int(num_batches // 5)
@@ -255,7 +255,7 @@ class BaseModel(nn.Module):
                     torch.save(self, f)
                     self.model_path = checkpoint_path
 
-    def do_train(self, dataset, batch_size, optimizer, num_batches=None):
+    def _train(self, dataset, batch_size, optimizer, num_batches=None):
         self.train()
 
         loss = Metric()
@@ -311,7 +311,7 @@ class BaseModel(nn.Module):
 
         return avg_loss, avg_metrics
 
-    def do_evaluate(self, dataset, batch_size, num_batches=None):
+    def _evaluate(self, dataset, batch_size, num_batches=None):
         self.eval()
 
         loss = Metric()

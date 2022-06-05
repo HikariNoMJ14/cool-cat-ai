@@ -1,3 +1,5 @@
 from src.generator.melody_generator import MelodyGenerator
-from src.generator.duration_generator import DurationGenerator
+from src.generator.duration.duration_base_generator import DurationBaseGenerator
+from src.generator.duration.duration_chord_generator import DurationChordGenerator
+from src.generator.duration.duration_full_generator import DurationFullGenerator
 from src.generator.time_step_generator import TimeStepGenerator

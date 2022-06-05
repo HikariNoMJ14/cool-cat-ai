@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from src.model.base import BaseModel
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
-src_path = os.path.join(dir_path, '../../../data', '..', '..')
+src_path = os.path.join(dir_path, '..', '..', '..')
 
 
 class TimeStepModel(BaseModel):

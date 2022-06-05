@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 
 from src.melody import Melody
-from src.generator import DurationGenerator
 from src.utils import get_filepaths
 from src.evaluation import objective_metrics
 
@@ -67,17 +66,8 @@ def evaluate_melody(filepath, corpus_sequences=None):
     return results
 
 
-def evaluate_model(model, logger, unseen=False):
+def evaluate_model(model, generator, logger, unseen=False):
     metrics = {}
-    temperature = .999
-    sample = (False, False)
-
-    generator = DurationGenerator(
-        model,
-        temperature,
-        sample,
-        logger
-    )
 
     corpus_sequences = {}
     for l in SEQUENCE_LENGTHS:
