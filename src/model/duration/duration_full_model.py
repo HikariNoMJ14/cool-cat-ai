@@ -6,6 +6,7 @@ from torch import nn
 import torch.nn.functional as F
 
 from src.model.duration import DurationChordModel
+from src.generator import DurationFullGenerator
 from src.utils.constants import TICKS_PER_MEASURE
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -54,6 +55,8 @@ class DurationFullModel(DurationChordModel):
     ]
 
     PLOTTED_METRICS = ['loss', 'pitch_loss', 'duration_loss']
+
+    GENERATOR_CLASS = DurationFullGenerator
 
     def __init__(self, dataset=None, logger=None, save_path=os.path.join(src_path, 'results'), **kwargs):
         super(DurationFullModel, self).__init__(dataset, logger, save_path, **kwargs)

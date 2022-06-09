@@ -18,7 +18,7 @@ src_path = os.path.join(dir_path, '..', '..', '..')
 
 class BaseModel(nn.Module):
     VOLATILE = False
-    LOG_INTERVAL = 500
+    LOG_INTERVAL = 2000
 
     METADATA_SYMBOL = -1
     METADATA_IDX_COUNT = 1
@@ -237,6 +237,8 @@ class BaseModel(nn.Module):
                 torch.save(self, f)
                 self.model_path = checkpoint_path
 
+            return True
+
         except KeyboardInterrupt:
             self.logger.info('--- Training stopped ---')
             self.logger.info(f'Time: {(time.time() - total_start_time):5.2f}s')
@@ -254,6 +256,8 @@ class BaseModel(nn.Module):
                 with open(checkpoint_path, 'wb') as f:
                     torch.save(self, f)
                     self.model_path = checkpoint_path
+
+            return False
 
     def _train(self, dataset, batch_size, optimizer, num_batches=None):
         self.train()

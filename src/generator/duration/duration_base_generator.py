@@ -211,7 +211,7 @@ class DurationBaseGenerator(MelodyGenerator):
         out_filepath_mid = os.path.join(out_path, filename_mid)
         out_filepath_csv = os.path.join(out_path, filename_csv)
 
-        self.melody.to_midi(out_filepath_mid, 150)
+        self.melody.to_midi(out_filepath_mid, 120)  # TODO convert from metadata mapping
         self.melody.encoded.to_csv(out_filepath_csv)
 
         return out_filepath_csv

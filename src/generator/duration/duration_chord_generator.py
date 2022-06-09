@@ -17,27 +17,6 @@ class DurationChordGenerator(DurationBaseGenerator):
     def __init__(self, model, metadata, temperature, sample, logger):
         super(DurationChordGenerator, self).__init__(model, metadata, temperature, sample, logger)
 
-    def generate_melody(self, melody_name, n_measures):
-        super().generate_melody(melody_name, n_measures)
-
-        tick = 0
-
-        with torch.no_grad():
-            while tick < n_measures * TICKS_PER_MEASURE:
-                generated_pitch, generated_duration = self.generate_note(tick)
-
-                self.generated_improvised_pitches = np.append(self.generated_improvised_pitches,
-                                                              generated_pitch.item())
-                self.generated_improvised_durations = np.append(self.generated_improvised_durations,
-                                                                generated_duration.item())
-
-                self.generated_improvised_offsets = np.append(self.generated_improvised_offsets,
-                                                              tick % TICKS_PER_MEASURE)
-                self.generated_improvised_ticks = np.append(self.generated_improvised_ticks,
-                                                            tick)
-
-                tick += generated_duration.item()
-
     def setup_context(self, melody_name, transpose_interval=0):
         chord_progressions = get_chord_progressions(src_path)
 

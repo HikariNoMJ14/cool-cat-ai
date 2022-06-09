@@ -315,8 +315,6 @@ def calculate_PV(melody, window_size):
     for start_measure in range(n_bars - window_size + 1):
         sequence = list(get_bars_crop(melody, start_measure, start_measure + window_size - 1)['pitch'] % 12)
 
-        # logger.info(sequence)
-
         if len(sequence) > 0:
             diff_pitches = set([])
             for pitch in sequence:
@@ -367,9 +365,30 @@ def calculate_RV(melody, window_size):
                 diff_durations.add(duration)
             rhythm_variation.append(float(len(diff_durations)))
 
-    # logger.info(rhythm_variation)
-
     return np.mean(rhythm_variation) if len(rhythm_variation) > 0 else 0.0
+
+
+# https://github.com/Impro-Visor/sequence_gan
+# Rhythm Variations (RV)
+# RV measures how many distinct note durations the model plays within a sequence
+# divided by the total number of notes in that sequence.
+
+
+def calculate_RVF(melody, window_size):
+    n_bars = melody['measure'].max() + 1
+
+    rhythm_variations = 0.0
+    n_windows = int(n_bars - window_size + 1)
+    for start_measure in range(n_windows):
+        sequence = list(get_bars_crop(melody, start_measure, start_measure + window_size - 1)['duration'])
+
+        if len(sequence) > 0:
+            diff_durations = set([])
+            for duration in sequence:
+                diff_durations.add(duration)
+            rhythm_variations += (float(len(diff_durations)) / len(sequence))
+
+    return rhythm_variations / n_windows
 
 
 # https://github.com/Impro-Visor/sequence_gan
@@ -435,6 +454,8 @@ def calculate_RM(melody, corpus_sequences, l):
             pass
 
         total += 1
+
+    return matches / total
 
 
 # https://github.com/Impro-Visor/sequence_gan

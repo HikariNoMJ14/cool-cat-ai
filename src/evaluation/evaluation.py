@@ -7,7 +7,7 @@ from src.utils import get_filepaths
 from src.evaluation import objective_metrics
 
 SEQUENCE_LENGTHS = [2, 3, 4, 5, 6, 7]
-EVALUATION_METRICS = ['PCHE1', 'PCHE4', 'PVF4', 'TS12', 'CPR2', 'DPR12', 'GPS', 'RV4', 'QR', 'HC-m']
+EVALUATION_METRICS = ['PCHE1', 'PCHE4', 'PVF4', 'TS12', 'CPR2', 'DPR12', 'GPS', 'RVF4', 'QR', 'HC-m']
 
 for l in SEQUENCE_LENGTHS:
     EVALUATION_METRICS.append(f'RM{l}')
@@ -39,8 +39,8 @@ def evaluate_melody(filepath, corpus_sequences=None):
     dpr12 = objective_metrics.calculate_DPR(df, 12)
     # GPS
     gs = objective_metrics.compute_piece_groove_similarity(df, max_pairs=np.inf)
-    # RV
-    rv4 = objective_metrics.calculate_RV(df, 4)
+    # RVF
+    rv4 = objective_metrics.calculate_RVF(df, 4)
     # QR
     qr = objective_metrics.calculate_QD(df)
     # HC
@@ -48,7 +48,7 @@ def evaluate_melody(filepath, corpus_sequences=None):
 
     results = {
         'PCHE1': pe1, 'PCHE4': pe4, 'PVF4': pvf4, 'TS12': ts12,
-        'CPR2': cpr2, 'DPR12': dpr12, 'GPS': gs, 'RV4': rv4,
+        'CPR2': cpr2, 'DPR12': dpr12, 'GPS': gs, 'RVF4': rv4,
         'QR': qr, 'HC': hc
     }
 
@@ -66,7 +66,7 @@ def evaluate_melody(filepath, corpus_sequences=None):
     return results
 
 
-def evaluate_model(model, generator, logger, unseen=False):
+def evaluate_model(model, generator, logger, n_measures=8, unseen=False):
     metrics = {}
 
     corpus_sequences = {}
@@ -83,7 +83,7 @@ def evaluate_model(model, generator, logger, unseen=False):
     seen_gen_filepaths = []
     for filepath in seen_filepaths:
         logger.debug(f"Seen: {filepath}")
-        generator.generate_melody(filepath, 32)
+        generator.generate_melody(filepath, n_measures)
 
         seen_gen_filepaths.append(
             generator.save('seen')
@@ -91,7 +91,7 @@ def evaluate_model(model, generator, logger, unseen=False):
 
     logger.info('Seen melodies')
     for generated_filepath in seen_gen_filepaths:
-        metrics[generated_filepath] = evaluate_melody(generated_filepath)
+        metrics[generated_filepath] = evaluate_melody(generated_filepath, corpus_sequences)
 
     metrics_df = pd.DataFrame().from_dict(metrics).T
     metrics_df['HC-m'] = metrics_df['HC'].apply(np.mean)

@@ -20,19 +20,18 @@ src_path = os.path.join(dir_path, '..', '..')
 
 
 if __name__ == "__main__":
-    # TODO improve?
     model_path = os.path.join(
         src_path,
-        'mlruns', '4',
-        '9bb8c4fed76e47c78c8c8c669e177318', 'artifacts',
-        '22_06_04_00_59_38_transpose_all_chord_extended_7_batchsize_64_seed_1234567890.pt'
+        'mlruns', '5',
+        '10890460b0ea43fea7e57354d0835405', 'artifacts',
+        '22_06_07_00_15_51_transpose_all_chord_extended_7_batchsize_64_seed_1234567890_best_val.pt'
     )
 
     model = torch.load(open(model_path, 'rb'))
     model_class = type(model)
 
     metadata = 78  # TODO load from tempo mapping
-    temperature = 0.01
+    temperature = 1.0
     sample = (False, False)
 
     if model_class == DurationBaseModel:
