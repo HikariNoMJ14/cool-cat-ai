@@ -26,7 +26,6 @@ class DurationChordGenerator(DurationBaseGenerator):
 
         chord_progression = chord_progressions[melody_name]
 
-        # TODO generalize logic - also appears on duration melody
         self.melody = DurationMelody(None, polyphonic=False, duration_correction=0)
         self.melody.song_name = melody_name
         self.melody.set_song_structure(chord_progression)

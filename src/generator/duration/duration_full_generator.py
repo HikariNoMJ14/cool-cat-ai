@@ -1,5 +1,4 @@
 import os
-import time
 
 import numpy as np
 import torch
@@ -7,7 +6,7 @@ from torch.functional import F
 
 from src.generator import DurationChordGenerator
 from src.melody import DurationMelody
-from src.utils import get_chord_progressions, get_original_filepath
+from src.utils import get_chord_progressions, get_original_filepath, reverse_tensor
 from src.utils.constants import TICKS_PER_MEASURE, REST_SYMBOL
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -36,7 +35,6 @@ class DurationFullGenerator(DurationChordGenerator):
 
         chord_progression = chord_progressions[melody_name]
 
-        # TODO generalize logic - also appears on duration melody
         self.melody = DurationMelody(None, polyphonic=False, duration_correction=0)
         self.melody.song_name = melody_name
         self.melody.set_song_structure(chord_progression)
@@ -76,8 +74,6 @@ class DurationFullGenerator(DurationChordGenerator):
             original_durations,
             chord_pitches
         ], 0).transpose(0, 1)
-
-        # TODO duplicate - similar to create_padded_tensor in model
 
     def get_original_context(self, tick):
         middle_tick = self.sequence_size // 2
@@ -178,7 +174,7 @@ class DurationFullGenerator(DurationChordGenerator):
             padded_original_durations[:, middle_tick + 1:],
             padded_original_chord_pitches[:, middle_tick + 1:]
         ], 0).transpose(0, 1)[None, :, :].cuda()
-        future = self.reverse_tensor(future, dim=0)
+        future = reverse_tensor(future, dim=0)
 
         return past_original, future
 

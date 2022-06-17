@@ -10,7 +10,7 @@ SEQUENCE_LENGTHS = [2, 3, 4, 5, 6, 7]
 EVALUATION_METRICS = ['PCHE1', 'PCHE4', 'PVF4', 'TS12', 'CPR2', 'DPR12', 'GPS', 'RVF4', 'QR', 'HC-m']
 
 for l in SEQUENCE_LENGTHS:
-    EVALUATION_METRICS.append(f'RM{l}')
+    EVALUATION_METRICS.append(f'RMF{l}')
 
 
 def evaluate_melody(filepath, corpus_sequences=None):
@@ -52,16 +52,16 @@ def evaluate_melody(filepath, corpus_sequences=None):
         'QR': qr, 'HC': hc
     }
 
-    # RM
+    # RMF
     if corpus_sequences is not None:
         for l in SEQUENCE_LENGTHS:
-            rm = objective_metrics.calculate_RM(
+            rm = objective_metrics.calculate_RMF(
                 df,
                 corpus_sequences=corpus_sequences,
                 l=l
             )
 
-            results[f'RM{l}'] = rm
+            results[f'RMF{l}'] = rm
 
     return results
 
@@ -120,4 +120,7 @@ def evaluate_model(model, generator, logger, n_measures=8, unseen=False):
             metrics_df.to_csv(os.path.join(os.path.dirname(model.best_model_path), 'evaluation_unseen.csv'))
 
             for metric in EVALUATION_METRICS:
-                logger.info(f'{metric} - {metrics_df[metric].mean():5.2f} - {metrics_df[metric].std():5.2f}')
+                if metric in metrics_df.columns:
+                    logger.info(f'{metric} - {metrics_df[metric].mean():5.2f} - {metrics_df[metric].std():5.2f}')
+                else:
+                    logger.error(f'{metric} has not been calculated')

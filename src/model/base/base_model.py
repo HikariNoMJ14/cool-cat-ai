@@ -364,13 +364,6 @@ class BaseModel(nn.Module):
 
         return tensor
 
-    def reverse_tensor(self, tensor, dim):
-        idx = [i for i in range(tensor.size(dim) - 1, -1, -1)]
-        idx = Variable(torch.LongTensor(idx).cuda(), volatile=self.VOLATILE).cuda()
-        tensor = tensor.index_select(dim, idx)
-
-        return tensor
-
     def plot_metrics(self, training_results):
         for metric in self.PLOTTED_METRICS:
             fig, ax = plt.subplots(nrows=1, ncols=1)

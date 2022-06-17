@@ -108,7 +108,6 @@ class Melody:
             src_path, 'data', 'tensor_dataset',
             'chords', f'{self.chord_encoding_type}_{self.chord_extension_count}.json')
 
-        # TODO pass chord encoding type
         with open(chord_mapping_filepath) as fp:
             self.chord_mapping = json.load(fp)
 

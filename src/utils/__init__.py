@@ -5,6 +5,8 @@ from glob import glob
 import copy
 import json
 
+import torch
+from torch.autograd import Variable
 import pandas as pd
 import numpy as np
 from difflib import SequenceMatcher
@@ -453,6 +455,10 @@ def replace_enharmonic(pitch):
         return 'C'
     return pitch
 
-# if __name__ == "__main__":
-# for i in range(128):
-#     print(int_to_pitch(i))
+
+def reverse_tensor(tensor, dim):
+    idx = [i for i in range(tensor.size(dim) - 1, -1, -1)]
+    idx = Variable(torch.LongTensor(idx), volatile=False).cuda()
+    tensor = tensor.index_select(dim, idx)
+
+    return tensor

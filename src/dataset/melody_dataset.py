@@ -140,7 +140,6 @@ class MelodyDataset:
         else:
             print('Problem with metadata')
 
-    # TODO also save song info to cross-reference songs and tensors
     def save(self):
         out_filename = f'{datetime.now().strftime("%Y_%m_%d_%H%M%S")}_' + self.name
         melody_out_filename = out_filename + '.pickle'

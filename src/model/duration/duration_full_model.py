@@ -7,6 +7,7 @@ import torch.nn.functional as F
 
 from src.model.duration import DurationChordModel
 from src.generator import DurationFullGenerator
+from src.utils import reverse_tensor
 from src.utils.constants import TICKS_PER_MEASURE
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -331,7 +332,7 @@ class DurationFullModel(DurationChordModel):
         )
 
         # Reverse sequence for future ticks
-        reversed_tensor = self.reverse_tensor(
+        reversed_tensor = reverse_tensor(
             original_batch[:, middle_tick + 1:, :], dim=1
         )
         # Remove improvised pitch and duration from future ticks

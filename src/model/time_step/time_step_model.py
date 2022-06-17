@@ -6,6 +6,7 @@ from torch import nn
 import torch.nn.functional as F
 
 from src.model.base import BaseModel
+from src.utils import reverse_tensor
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..', '..')
@@ -258,7 +259,7 @@ class TimeStepModel(BaseModel):
         )
 
         # Reverse sequence for future ticks
-        reversed_tensor = self.reverse_tensor(
+        reversed_tensor = reverse_tensor(
             batch[:, middle_tick + 1:, :], dim=1
         )
         # Remove improvised pitch and attack from future ticks
