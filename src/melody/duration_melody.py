@@ -9,7 +9,7 @@ from src.utils import is_weakly_polyphonic, is_strongly_polyphonic, \
     remove_weak_polyphony, remove_strong_polyphony, \
     flatten_chord_progression
 from src.utils.ezchord import Chord
-from src.utils.constants import OCTAVE_SEMITONES, REST_SYMBOL
+from src.utils.constants import OCTAVE_SEMITONES, REST_PITCH_SYMBOL
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
@@ -182,7 +182,7 @@ class DurationMelody(Melody):
         ).long().clone()
 
         improvised_pitches = torch.from_numpy(
-            np.array((improvised_encoded[['pitch']] + transpose_interval).fillna(REST_SYMBOL))
+            np.array((improvised_encoded[['pitch']] + transpose_interval).fillna(REST_PITCH_SYMBOL))
         ).long().clone().transpose(0, 1)
 
         improvised_duration = torch.from_numpy(
@@ -197,7 +197,7 @@ class DurationMelody(Melody):
             np.stack(
                 improvised_encoded['chord_name'].apply(
                     lambda x: self.transpose_chord(x, transpose_interval)
-                ).fillna(REST_SYMBOL)
+                ).fillna(REST_PITCH_SYMBOL)
             )
         ).long().clone().transpose(0, 1)
 
@@ -226,7 +226,7 @@ class DurationMelody(Melody):
         ).long().clone()
 
         original_pitches = torch.from_numpy(
-            np.array([(original_encoded['pitch'] + transpose_interval).fillna(REST_SYMBOL)])
+            np.array([(original_encoded['pitch'] + transpose_interval).fillna(REST_PITCH_SYMBOL)])
         ).long().clone()
 
         original_duration = torch.from_numpy(
@@ -241,7 +241,7 @@ class DurationMelody(Melody):
             np.stack(
                 original_encoded['chord_name'].apply(
                     lambda x: self.transpose_chord(x, transpose_interval)
-                ).fillna(REST_SYMBOL)
+                ).fillna(REST_PITCH_SYMBOL)
             )
         ).long().clone().transpose(0, 1)
 

@@ -5,7 +5,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from src.model.base import BaseModel
+from src.model import BaseModel
 from src.generator import DurationBaseGenerator
 from src.utils.constants import TICKS_PER_MEASURE
 
@@ -224,7 +224,7 @@ class DurationBaseModel(BaseModel):
         merge_nn_output = self.merge_nn(merge_nn_input)
 
         output_improvised_pitch = self.pitch_decoder(torch.sigmoid(merge_nn_output[:, :self.embedding_size]))
-        output_improvised_duration = self.duration_decoder(torch.sigmoid(merge_nn_output[:, :self.embedding_size]))
+        output_improvised_duration = self.duration_decoder(torch.sigmoid(merge_nn_output[:, self.embedding_size:]))
 
         if self.normalize:
             output_improvised_pitch = F.normalize(output_improvised_pitch, p=2, dim=1)
@@ -343,8 +343,9 @@ class DurationBaseModel(BaseModel):
                 np.array([self.start_duration_symbol])
             ).long().clone().repeat(-start_idx, 1).transpose(0, 1)
 
+            # Not used --- added simply to keep the tensor size consistent
             left_padded_metadata = torch.from_numpy(
-                np.array(self.METADATA_SYMBOL)
+                np.array(self.METADATA_PADDING_SYMBOL)
             ).long().clone().repeat(-start_idx, self.METADATA_IDX_COUNT).transpose(0, 1)
 
             padded_offsets.append(left_padded_offsets)
@@ -372,8 +373,9 @@ class DurationBaseModel(BaseModel):
                 np.array([self.end_duration_symbol])
             ).long().clone().repeat(end_idx - length, 1).transpose(0, 1)
 
+            # Not used --- added simply to keep the tensor size consistent
             right_padded_metadata = torch.from_numpy(
-                np.array(self.METADATA_SYMBOL)
+                np.array(self.METADATA_PADDING_SYMBOL)
             ).long().clone().repeat(end_idx - length, self.METADATA_IDX_COUNT).transpose(0, 1)
 
             padded_offsets.append(right_padded_offsets)

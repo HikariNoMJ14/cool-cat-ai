@@ -5,14 +5,14 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from src.model.base import BaseModel
+from src.model import ChordModel
 from src.utils import reverse_tensor
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..', '..')
 
 
-class TimeStepModel(BaseModel):
+class TimeStepModel(ChordModel):
     # Input data semantics
     TENSOR_IDX_MAPPING = {
         'offset': 0,
@@ -20,7 +20,8 @@ class TimeStepModel(BaseModel):
         'improvised_attack': 2,
         'original_pitch': 3,
         'original_attack': 4,
-        'chord_pitches_start': 5
+        'metadata': 5,
+        'chord_pitches_start': 6
     }
 
     FEATURES = {
@@ -63,15 +64,31 @@ class TimeStepModel(BaseModel):
 
         self.attack_loss_weight = kwargs['attack_loss_weight']
 
-        self.attack_loss_function = nn.BCEWithLogitsLoss()
+        self.attack_loss_function = nn.CrossEntropyLoss(
+            weight=torch.Tensor([.1, .8, .05, .05])  # Focus on learning the occurrences of attack = 1
+        )
+
+        if kwargs['use_padding_idx'] and self.start_attack_symbol != self.end_attack_symbol:
+            self.logger.warning('Start attack symbol and end attack symbol are different, '
+                                'padding_idx will only act on start attack symbol')
+
+        self.attack_encoder = nn.Sequential(
+            nn.Embedding(
+                self.attack_size,
+                self.embedding_size,
+                scale_grad_by_freq=True,
+                padding_idx=self.start_attack_symbol if kwargs['use_padding_idx'] else None
+            ),
+            nn.Dropout(self.embedding_dropout_rate)
+        )
 
         #  offset +
         #  improvised_pitch + improvised_attack +
         #  original_pitch + original_attack +
         #  chord_pitch * number_of_pitches
         past_lstm_input_size = self.embedding_size + \
-                               self.embedding_size + self.attack_size + \
-                               self.embedding_size + self.attack_size + \
+                               self.embedding_size + self.embedding_size + \
+                               self.embedding_size + self.embedding_size + \
                                self.embedding_size * self.chord_extension_count
 
         self.logger.debug(f'Model past LSTM input size: {past_lstm_input_size}')
@@ -89,7 +106,7 @@ class TimeStepModel(BaseModel):
         #  metadata +
         #  chord_pitch * number_of_pitches
         present_nn_input_size = self.embedding_size + \
-                                self.embedding_size + self.attack_size + \
+                                self.embedding_size + self.embedding_size + \
                                 self.embedding_size + \
                                 self.embedding_size * self.chord_extension_count
 
@@ -108,7 +125,7 @@ class TimeStepModel(BaseModel):
         #  original_pitch + original_attack +
         #  chord_pitch * number_of_pitches
         future_lstm_input_size = self.embedding_size + \
-                                 self.embedding_size + self.attack_size + \
+                                 self.embedding_size + self.embedding_size + \
                                  self.embedding_size * self.chord_extension_count
 
         self.logger.debug(f'Model future LSTM input size: {future_lstm_input_size}')
@@ -122,7 +139,7 @@ class TimeStepModel(BaseModel):
         )
 
         merge_nn_input_size = self.lstm_hidden_size + self.nn_output_size + self.lstm_hidden_size
-        merge_nn_output_size = self.embedding_size + self.attack_size
+        merge_nn_output_size = self.embedding_size + self.embedding_size
 
         self.merge_nn = nn.Sequential(
             nn.Linear(merge_nn_input_size, self.nn_hidden_size),
@@ -130,6 +147,11 @@ class TimeStepModel(BaseModel):
             nn.Dropout(self.nn_dropout_rate),
             nn.Linear(self.nn_hidden_size, merge_nn_output_size)
         )
+
+        self.attack_decoder = nn.Linear(self.embedding_size, self.attack_size)
+
+        # Tie attack encoder and attack weights
+        self.attack_decoder.weight = self.attack_encoder[0].weight
 
     def prepare_past_lstm_input(self, past):
         # Extract features from past tensor
@@ -145,8 +167,8 @@ class TimeStepModel(BaseModel):
         past_improvised_pitch_embedding = self.pitch_encoder(past_improvised_pitches)
         past_original_pitch_embedding = self.pitch_encoder(past_original_pitches)
         past_chord_pitches_embedding = self.encode_chord_pitches(past_chord_pitches)
-        past_improvised_attacks = past_improvised_attacks[:, :, None]
-        past_original_attacks = past_original_attacks[:, :, None]
+        past_improvised_attacks = self.attack_encoder(past_improvised_attacks)
+        past_original_attacks = self.attack_encoder(past_original_attacks)
 
         return torch.cat([
             past_offset_embedding,
@@ -166,7 +188,7 @@ class TimeStepModel(BaseModel):
         present_offset_embedding = self.offset_encoder(present_offsets)
         present_original_pitch_embedding = self.pitch_encoder(present_original_pitches)
         present_chord_pitches_embedding = self.encode_chord_pitches(present_chord_pitches)
-        present_original_attacks = present_original_attacks[:, :, None]
+        present_original_attacks = self.attack_encoder(present_original_attacks)
 
         return torch.cat([
             present_offset_embedding,
@@ -185,7 +207,7 @@ class TimeStepModel(BaseModel):
         future_offset_embedding = self.offset_encoder(future_offsets)
         future_original_pitch_embedding = self.pitch_encoder(future_original_pitches)
         future_chord_pitches_embedding = self.encode_chord_pitches(future_chord_pitches)
-        future_original_attacks = future_original_attacks[:, :, None]
+        future_original_attacks = self.attack_encoder(future_original_attacks)
 
         return torch.cat([
             future_offset_embedding,
@@ -222,7 +244,7 @@ class TimeStepModel(BaseModel):
         merge_nn_output = self.merge_nn(merge_nn_input)
 
         output_improvised_pitch = self.pitch_decoder(torch.sigmoid(merge_nn_output[:, :self.embedding_size]))
-        output_improvised_attack = merge_nn_output[:, -self.attack_size:].view(-1)
+        output_improvised_attack = self.attack_decoder(torch.sigmoid(merge_nn_output[:, self.embedding_size:]))
 
         if self.normalize:
             output_improvised_pitch = F.normalize(output_improvised_pitch, p=2, dim=1)
@@ -234,10 +256,18 @@ class TimeStepModel(BaseModel):
         batch_size, sequence_size, _ = batch.size()
         middle_tick = sequence_size // 2
 
-        assert batch[:, middle_tick:middle_tick + 1, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
-        assert batch[:, middle_tick:middle_tick + 1, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
-        assert batch[:, :middle_tick, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
-        assert batch[:, middle_tick + 1:, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
+        assert batch[:, middle_tick:middle_tick + 1, 1].eq(self.start_pitch_symbol).count_nonzero() == 0 and \
+               batch[:, middle_tick:middle_tick + 1, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
+        assert batch[:, middle_tick:middle_tick + 1, 2].eq(self.start_attack_symbol).count_nonzero() == 0 and \
+               batch[:, middle_tick:middle_tick + 1, 2].eq(self.end_attack_symbol).count_nonzero() == 0
+
+        if self.start_pitch_symbol != self.end_pitch_symbol:
+            assert batch[:, :middle_tick, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
+            assert batch[:, middle_tick + 1:, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
+
+        if self.start_attack_symbol != self.end_attack_symbol:
+            assert batch[:, :middle_tick, 2].eq(self.end_attack_symbol).count_nonzero() == 0
+            assert batch[:, middle_tick + 1:, 2].eq(self.start_attack_symbol).count_nonzero() == 0
 
         past_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
                                for feature in self.FEATURES['past']]
@@ -282,12 +312,20 @@ class TimeStepModel(BaseModel):
         )
         label = label.view(batch_size, -1)
 
-        assert past.eq(self.end_pitch_symbol).count_nonzero() == 0
-        assert present.eq(self.start_pitch_symbol).count_nonzero() == 0 and \
-               present.eq(self.end_pitch_symbol).count_nonzero() == 0
-        assert future.eq(self.start_pitch_symbol).count_nonzero() == 0
-        assert label.eq(self.start_pitch_symbol).count_nonzero() == 0 and \
-               label.eq(self.end_pitch_symbol).count_nonzero() == 0
+        assert present[:, :, 1].eq(self.start_pitch_symbol).count_nonzero() == 0 and \
+               present[:, :, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
+        assert label[:, 0].eq(self.start_pitch_symbol).count_nonzero() == 0 and \
+               label[:, 0].eq(self.end_pitch_symbol).count_nonzero() == 0
+        assert present[:, :, 2].eq(self.start_attack_symbol).count_nonzero() == 0 and \
+               present[:, :, 2].eq(self.end_attack_symbol).count_nonzero() == 0
+        assert label[:, 0].eq(self.start_attack_symbol).count_nonzero() == 0 and \
+               label[:, 0].eq(self.end_attack_symbol).count_nonzero() == 0
+
+        if self.start_pitch_symbol != self.end_pitch_symbol:
+            assert past[:, :, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
+            assert future[:, :, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
+            assert past[:, :, 2].eq(self.end_attack_symbol).count_nonzero() == 0
+            assert future[:, :, 3].eq(self.start_attack_symbol).count_nonzero() == 0
 
         return (past, present, future), label
 
@@ -310,6 +348,12 @@ class TimeStepModel(BaseModel):
         start_idx = index
         end_idx = index + self.sequence_size
 
+        metadata_start = self.TENSOR_IDX_MAPPING['metadata']
+        metadata_end = self.TENSOR_IDX_MAPPING['metadata'] + self.METADATA_IDX_COUNT
+
+        chord_pitches_start = self.TENSOR_IDX_MAPPING['chord_pitches_start']
+        chord_pitches_end = self.TENSOR_IDX_MAPPING['chord_pitches_start'] + self.chord_extension_count
+
         length = example.size(0)
 
         common_sliced_data = example[np.arange(start_idx, end_idx) % length]
@@ -318,9 +362,11 @@ class TimeStepModel(BaseModel):
         original_pitches = common_sliced_data[None, :, 1]
         original_attacks = common_sliced_data[None, :, 2]
 
+        metadata = common_sliced_data[:, metadata_start:metadata_end].transpose(0, 1)
+
         chord_pitches = torch.from_numpy(
             np.stack(
-                common_sliced_data[:, 5:12]
+                common_sliced_data[:, chord_pitches_start:chord_pitches_end]
             )
         ).long().clone().transpose(0, 1)
 
@@ -373,6 +419,7 @@ class TimeStepModel(BaseModel):
             improvised_attacks,
             original_pitches,
             original_attacks,
+            metadata,
             chord_pitches
         ], 0).transpose(0, 1).cuda()
 
@@ -381,8 +428,9 @@ class TimeStepModel(BaseModel):
     def loss_function(self, prediction, label):
         output_pitch = prediction[0]
         output_attack = prediction[1]
+
         pitch_loss = self.pitch_loss_function(output_pitch, label[:, 0])
-        attack_loss = self.attack_loss_function(output_attack.float(), label[:, 1].float())
+        attack_loss = self.attack_loss_function(output_attack, label[:, 1])
 
         pitch_top1, \
         pitch_top3, \
@@ -393,7 +441,7 @@ class TimeStepModel(BaseModel):
         )
 
         attack_top1, = self.accuracy(
-            output_attack[:, None],
+            output_attack,
             label[:, 1].contiguous(),
             topk=(1,)
         )

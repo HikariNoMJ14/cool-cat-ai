@@ -18,9 +18,9 @@ src_path = os.path.join(dir_path, '..', '..', '..')
 
 class BaseModel(nn.Module):
     VOLATILE = False
-    LOG_INTERVAL = 2000
+    LOG_INTERVAL = 1000
 
-    METADATA_SYMBOL = -1
+    METADATA_PADDING_SYMBOL = -1
     METADATA_IDX_COUNT = 1
 
     def __init__(self, dataset=None, logger=None, save_path=os.path.join(src_path, 'results'), **kwargs):
@@ -159,9 +159,8 @@ class BaseModel(nn.Module):
                 epoch_start_time = time.time()
 
                 train_dataset, \
-                val_dataset, \
-                test_dataset = self.dataset.split(
-                    split=(.85, .15, 0),
+                val_dataset = self.dataset.split(
+                    split=(.85, .15),
                     seed=seed
                 )
 
@@ -177,7 +176,7 @@ class BaseModel(nn.Module):
                 valid_loss, valid_metrics = self._evaluate(
                     dataset=val_dataset,
                     batch_size=batch_size,
-                    num_batches=int(num_batches // 5)
+                    num_batches=None  # Use all the batches in the validation dataset
                 )
 
                 training_str = ' | '.join([f'train_{k}: {v:5.2f}' for k, v in train_metrics.items()])

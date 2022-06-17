@@ -2,7 +2,7 @@ import os
 
 import torch
 
-from src.model.base import BaseModel
+from src.model import BaseModel
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..', '..')

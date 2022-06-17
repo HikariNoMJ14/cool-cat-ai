@@ -6,10 +6,10 @@ import torch
 
 from src.melody import Melody
 from src.utils import is_weakly_polyphonic, is_strongly_polyphonic, \
-                      remove_weak_polyphony, remove_strong_polyphony, \
-                      flatten_chord_progression
+    remove_weak_polyphony, remove_strong_polyphony, \
+    flatten_chord_progression
 from src.utils.ezchord import Chord
-from src.utils.constants import REST_SYMBOL
+from src.utils.constants import REST_PITCH_SYMBOL, REST_ATTACK_SYMBOL
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
@@ -188,32 +188,36 @@ class TimeStepMelody(Melody):
 
         self.encoded.to_csv(f'{self.encoded_folder}/{self.source}/{self.filename}')
 
-    def to_tensor(self, transpose_interval):
+    def to_tensor(self, transpose_interval, metadata):
         offsets = torch.from_numpy(
             np.array([self.encoded['offset']])
         ).long().clone()
 
         improvised_pitches = torch.from_numpy(
-            np.array((self.encoded[['improvised_pitch']] + transpose_interval).fillna(REST_SYMBOL))
-        ).long().clone().transpose(0, 1)
+            np.array([(self.encoded['improvised_pitch'] + transpose_interval).fillna(REST_PITCH_SYMBOL)])
+        ).long().clone()
 
         improvised_attacks = torch.from_numpy(
-            np.array(self.encoded[['improvised_attack']])
-        ).long().clone().transpose(0, 1)
+            np.array([self.encoded['improvised_attack'].fillna(REST_ATTACK_SYMBOL)])
+        ).long().clone()
 
         original_pitches = torch.from_numpy(
-            np.array([(self.encoded['original_pitch'] + transpose_interval).fillna(REST_SYMBOL)])
+            np.array([(self.encoded['original_pitch'] + transpose_interval).fillna(REST_ATTACK_SYMBOL)])
         ).long().clone()
 
         original_attacks = torch.from_numpy(
-            np.array([self.encoded['original_attack']])
+            np.array([self.encoded['original_attack'].fillna(REST_ATTACK_SYMBOL)])
         ).long().clone()
+
+        metadata = torch.from_numpy(
+            np.tile(metadata, (self.encoded.shape[0], 1))
+        ).long().clone().transpose(0, 1)
 
         chord_pitches = torch.from_numpy(
             np.stack(
                 self.encoded['chord_name'].apply(
                     lambda x: self.transpose_chord(x, transpose_interval)
-                ).fillna(REST_SYMBOL)
+                ).fillna(REST_PITCH_SYMBOL)
             )
         ).long().clone().transpose(0, 1)
 
@@ -223,6 +227,7 @@ class TimeStepMelody(Melody):
             improvised_attacks,
             original_pitches,
             original_attacks,
+            metadata,
             chord_pitches
         ], 0).transpose(0, 1)[None, :, :]
 

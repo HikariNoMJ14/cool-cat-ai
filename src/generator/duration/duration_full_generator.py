@@ -7,7 +7,7 @@ from torch.functional import F
 from src.generator import DurationChordGenerator
 from src.melody import DurationMelody
 from src.utils import get_chord_progressions, get_original_filepath, reverse_tensor
-from src.utils.constants import TICKS_PER_MEASURE, REST_SYMBOL
+from src.utils.constants import TICKS_PER_MEASURE, REST_PITCH_SYMBOL
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..', '..')
@@ -52,7 +52,7 @@ class DurationFullGenerator(DurationChordGenerator):
         ).long().clone()
 
         original_pitches = torch.from_numpy(
-            np.array([(original_notes['pitch'] + transpose_interval).fillna(REST_SYMBOL)])
+            np.array([(original_notes['pitch'] + transpose_interval).fillna(REST_PITCH_SYMBOL)])
         ).long().clone()
 
         original_durations = torch.from_numpy(

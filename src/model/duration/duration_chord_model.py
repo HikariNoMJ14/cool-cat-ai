@@ -5,8 +5,8 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from src.model.base import ChordModel
-from src.model.duration import DurationBaseModel
+from src.model import ChordModel
+from src.model import DurationBaseModel
 from src.generator import DurationChordGenerator
 from src.utils.constants import TICKS_PER_MEASURE
 
@@ -280,8 +280,9 @@ class DurationChordModel(DurationBaseModel, ChordModel):
                 np.array([self.start_duration_symbol])
             ).long().clone().repeat(-start_idx, 1).transpose(0, 1)
 
+            # Not used --- added simply to keep the tensor size consistent
             left_padded_metadata = torch.from_numpy(
-                np.array(self.METADATA_SYMBOL)
+                np.array(self.METADATA_PADDING_SYMBOL)
             ).long().clone().repeat(-start_idx, self.METADATA_IDX_COUNT).transpose(0, 1)
 
             # TODO use chord for corresponding offset?
@@ -316,8 +317,9 @@ class DurationChordModel(DurationBaseModel, ChordModel):
                 np.array([self.end_duration_symbol])
             ).long().clone().repeat(end_idx - length, 1).transpose(0, 1)
 
+            # Not used --- added simply to keep the tensor size consistent
             right_padded_metadata = torch.from_numpy(
-                np.array(self.METADATA_SYMBOL)
+                np.array(self.METADATA_PADDING_SYMBOL)
             ).long().clone().repeat(end_idx - length, self.METADATA_IDX_COUNT).transpose(0, 1)
 
             # TODO use chord for corresponding offset?

@@ -9,7 +9,7 @@ from torch.functional import F
 from src.generator import MelodyGenerator
 from src.melody import TimeStepMelody
 from src.utils import get_chord_progressions, get_original_filepath, reverse_tensor
-from src.utils.constants import TICKS_PER_MEASURE, REST_SYMBOL
+from src.utils.constants import TICKS_PER_MEASURE, REST_PITCH_SYMBOL, REST_ATTACK_SYMBOL
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
@@ -59,11 +59,11 @@ class TimeStepGenerator(MelodyGenerator):
         ).long().clone()
 
         original_pitches = torch.from_numpy(
-            np.array([(self.melody.encoded['original_pitch'] + transpose_interval).fillna(REST_SYMBOL)])
+            np.array([(self.melody.encoded['original_pitch'] + transpose_interval).fillna(REST_PITCH_SYMBOL)])
         ).long().clone()
 
         original_attacks = torch.from_numpy(
-            np.array([self.melody.encoded['original_attack']])
+            np.array([self.melody.encoded['original_attack'].fillna(REST_ATTACK_SYMBOL)])
         ).long().clone()
 
         chord_pitches = torch.from_numpy(
@@ -162,7 +162,7 @@ class TimeStepGenerator(MelodyGenerator):
             original_attacks[:, middle_tick + 1:],
             chord_pitches[:, middle_tick + 1:]
         ], 0).transpose(0, 1)[None, :, :].cuda()
-        future = self.reverse_tensor(future, dim=0)
+        future = reverse_tensor(future, dim=0)
 
         assert past.eq(self.end_pitch_symbol).count_nonzero() == 0
         assert present.eq(self.start_pitch_symbol).count_nonzero() == 0 and present.eq(
@@ -170,7 +170,7 @@ class TimeStepGenerator(MelodyGenerator):
         assert future.eq(self.start_pitch_symbol).count_nonzero() == 0
 
         return past, present, future
-    
+
     def generate_note(self, tick):
         past, present, future = self.get_context(tick)
 
@@ -210,8 +210,12 @@ class TimeStepGenerator(MelodyGenerator):
         return new_pitch, new_attack
 
     def save(self):
-        self.melody.encoded['improvised_pitch'] = pd.Series(data=self.generated_improvised_pitches).replace(REST_SYMBOL,                                                                                  np.nan)
-        self.melody.encoded['improvised_attack'] = pd.Series(data=self.generated_improvised_attacks)
+        self.melody.encoded['improvised_pitch'] = pd.Series(data=self.generated_improvised_pitches).replace(
+            REST_PITCH_SYMBOL,
+            np.nan)
+        self.melody.encoded['improvised_attack'] = pd.Series(data=self.generated_improvised_attacks).replace(
+            REST_ATTACK_SYMBOL,
+            np.nan)
 
         out_path = os.path.join(
             src_path,

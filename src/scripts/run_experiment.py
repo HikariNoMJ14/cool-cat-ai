@@ -8,9 +8,6 @@ import mlflow
 import yaml
 
 from src.dataset import MelodyDataset
-from src.model.duration import DurationBaseModel, DurationChordModel, DurationFullModel
-from src.model.time_step.time_step_model import TimeStepModel
-
 from src.evaluation import evaluate_model
 
 logger = logging.getLogger()
@@ -55,6 +52,8 @@ if __name__ == "__main__":
     use_padding_idx = bool(model_config['use_padding_idx'])
     start_pitch_symbol = int(model_config['start_pitch_symbol'])
     end_pitch_symbol = int(model_config['end_pitch_symbol'])
+    start_attack_symbol = int(model_config['start_attack_symbol'])
+    end_attack_symbol = int(model_config['end_attack_symbol'])
     start_duration_symbol = int(model_config['start_duration_symbol'])
     end_duration_symbol = int(model_config['end_duration_symbol'])
 
@@ -93,12 +92,20 @@ if __name__ == "__main__":
         raise Exception(f"Chord extension count has to be 12 for encoding type 'compressed'")
 
     if encoding_type == 'timestep':
+        from src.model.time_step.time_step_model import TimeStepModel
+
         model_class = TimeStepModel
     elif encoding_type == 'duration_base':
+        from src.model.duration import DurationBaseModel
+
         model_class = DurationBaseModel
     elif encoding_type == 'duration_chord':
+        from src.model.duration import DurationChordModel
+
         model_class = DurationChordModel
     elif encoding_type == 'duration':
+        from src.model.duration import DurationFullModel
+
         model_class = DurationFullModel
     else:
         raise Exception(f'Unknown encoding type: {encoding_type}')
@@ -126,6 +133,8 @@ if __name__ == "__main__":
     mlflow.log_param('use_padding_idx', use_padding_idx)
     mlflow.log_param('start_pitch_symbol', start_pitch_symbol)
     mlflow.log_param('end_pitch_symbol', end_pitch_symbol)
+    mlflow.log_param('start_attack_symbol', start_attack_symbol)
+    mlflow.log_param('end_attack_symbol', end_attack_symbol)
     mlflow.log_param('start_duration_symbol', start_duration_symbol)
     mlflow.log_param('end_duration_symbol', end_duration_symbol)
     mlflow.log_param('offset_size', offset_size)
@@ -176,6 +185,8 @@ if __name__ == "__main__":
         use_padding_idx=use_padding_idx,
         start_pitch_symbol=start_pitch_symbol,
         end_pitch_symbol=end_pitch_symbol,
+        start_attack_symbol=start_attack_symbol,
+        end_attack_symbol=end_attack_symbol,
         start_duration_symbol=start_duration_symbol,
         end_duration_symbol=end_duration_symbol,
         offset_size=offset_size,

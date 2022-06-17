@@ -112,7 +112,7 @@ class MelodyDataset:
 
         return transpose_semitones
 
-    def split(self, split=(0.85, 0.10, 0.05), seed=None):
+    def split(self, split=(0.85, 0.15), seed=None):
         assert sum(split) == 1
 
         tensor_dataset = self.tensor_dataset
@@ -121,8 +121,7 @@ class MelodyDataset:
         return torch.utils.data.random_split(
             tensor_dataset, [
                 int(round(num_examples * split[0])),
-                int(round(num_examples * split[1])),
-                int(round(num_examples * split[2]))
+                int(round(num_examples * split[1]))
             ],
             generator=torch.Generator().manual_seed(seed)
         )
