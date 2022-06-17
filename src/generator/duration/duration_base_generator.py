@@ -9,7 +9,7 @@ from torch.functional import F
 from src.generator import MelodyGenerator
 from src.melody import DurationMelody
 from src.utils import get_chord_progressions
-from src.utils.constants import TICKS_PER_MEASURE, REST_SYMBOL
+from src.utils.constants import TICKS_PER_MEASURE, REST_PITCH_SYMBOL
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..', '..')
@@ -180,7 +180,7 @@ class DurationBaseGenerator(MelodyGenerator):
         new_melody = pd.DataFrame()
         new_melody['ticks'] = pd.Series(data=self.generated_improvised_ticks)
         new_melody['offset'] = pd.Series(data=self.generated_improvised_offsets)
-        new_melody['improvised_pitch'] = pd.Series(data=self.generated_improvised_pitches).replace(REST_SYMBOL, np.nan)
+        new_melody['improvised_pitch'] = pd.Series(data=self.generated_improvised_pitches).replace(REST_PITCH_SYMBOL, np.nan)
         new_melody['improvised_duration'] = pd.Series(data=self.generated_improvised_durations)
         new_melody['chord_name'] = pd.Series(data=[
             self.melody.flat_chord_progression[

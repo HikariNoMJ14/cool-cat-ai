@@ -5,7 +5,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from src.model.duration import DurationChordModel
+from src.model import DurationChordModel
 from src.generator import DurationFullGenerator
 from src.utils import reverse_tensor
 from src.utils.constants import TICKS_PER_MEASURE
@@ -286,10 +286,16 @@ class DurationFullModel(DurationChordModel):
 
         assert improvised_batch[:, middle_tick:middle_tick + 1, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
         assert improvised_batch[:, middle_tick:middle_tick + 1, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
+        assert improvised_batch[:, middle_tick:middle_tick + 1, 2].eq(self.start_duration_symbol).count_nonzero() == 0
+        assert improvised_batch[:, middle_tick:middle_tick + 1, 2].eq(self.end_duration_symbol).count_nonzero() == 0
 
-        if self.start_pitch_symbol != self.start_pitch_symbol:
+        if self.start_pitch_symbol != self.end_pitch_symbol:
             assert improvised_batch[:, :middle_tick, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
             assert improvised_batch[:, middle_tick + 1:, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
+
+        if self.start_duration_symbol != self.end_duration_symbol:
+            assert improvised_batch[:, :middle_tick, 2].eq(self.end_duration_symbol).count_nonzero() == 0
+            assert improvised_batch[:, middle_tick + 1:, 2].eq(self.start_duration_symbol).count_nonzero() == 0
 
         past_improvised_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
                                           for feature in self.FEATURES['past_improvised']]
@@ -361,11 +367,18 @@ class DurationFullModel(DurationChordModel):
                present.eq(self.end_pitch_symbol).count_nonzero() == 0
         assert label[:, 0].eq(self.start_pitch_symbol).count_nonzero() == 0 and \
                label[:, 0].eq(self.end_pitch_symbol).count_nonzero() == 0
+        assert present[:, :, 2].eq(self.start_duration_symbol).count_nonzero() == 0 and \
+               present[:, :, 2].eq(self.end_duration_symbol).count_nonzero() == 0
+        assert label[:, 0].eq(self.start_duration_symbol).count_nonzero() == 0 and \
+               label[:, 0].eq(self.end_duration_symbol).count_nonzero() == 0
 
-        if self.start_pitch_symbol != self.start_pitch_symbol:
+        if self.start_pitch_symbol != self.end_pitch_symbol:
             assert past_improvised[:, :, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
             assert past_original[:, :, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
             assert future[:, :, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
+            assert past_improvised[:, :, 2].eq(self.end_duration_symbol).count_nonzero() == 0
+            assert past_original[:, :, 2].eq(self.end_duration_symbol).count_nonzero() == 0
+            assert future[:, :, 2].eq(self.start_duration_symbol).count_nonzero() == 0
 
         return (past_improvised, past_original, present, future), label
 
@@ -455,8 +468,9 @@ class DurationFullModel(DurationChordModel):
                 np.array([self.start_duration_symbol])
             ).long().clone().repeat(-start_idx, 1).transpose(0, 1)
 
+            # Not used --- added simply to keep the tensor size consistent
             left_padded_metadata = torch.from_numpy(
-                np.array(self.METADATA_SYMBOL)
+                np.array(self.METADATA_PADDING_SYMBOL)
             ).long().clone().repeat(-start_idx, self.METADATA_IDX_COUNT).transpose(0, 1)
 
             # TODO use chord for corresponding offset?
@@ -491,8 +505,9 @@ class DurationFullModel(DurationChordModel):
                 np.array([self.end_duration_symbol])
             ).long().clone().repeat(end_idx - length, 1).transpose(0, 1)
 
+            # Not used --- added simply to keep the tensor size consistent
             right_padded_metadata = torch.from_numpy(
-                np.array(self.METADATA_SYMBOL)
+                np.array(self.METADATA_PADDING_SYMBOL)
             ).long().clone().repeat(end_idx - length, self.METADATA_IDX_COUNT).transpose(0, 1)
 
             # TODO use chord for corresponding offset?
