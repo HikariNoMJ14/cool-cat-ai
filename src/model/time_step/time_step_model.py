@@ -6,6 +6,7 @@ from torch import nn
 import torch.nn.functional as F
 
 from src.model.base import BaseModel
+from src.utils import reverse_tensor
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..', '..')
@@ -28,10 +29,10 @@ class TimeStepModel(BaseModel):
             'improvised_pitch', 'improvised_attack',
             'original_pitch', 'original_attack'
         ],
-        # TODO Add metadata
         'present': [
             'offset',
-            'original_pitch', 'original_attack'
+            'original_pitch', 'original_attack',
+            'metadata'
         ],
         'future': [
             'offset',
@@ -89,7 +90,7 @@ class TimeStepModel(BaseModel):
         #  chord_pitch * number_of_pitches
         present_nn_input_size = self.embedding_size + \
                                 self.embedding_size + self.attack_size + \
-                                self.metadata_size + \
+                                self.embedding_size + \
                                 self.embedding_size * self.chord_extension_count
 
         self.logger.debug(f'Model present LSTM input size: {present_nn_input_size}')
@@ -258,7 +259,7 @@ class TimeStepModel(BaseModel):
         )
 
         # Reverse sequence for future ticks
-        reversed_tensor = self.reverse_tensor(
+        reversed_tensor = reverse_tensor(
             batch[:, middle_tick + 1:, :], dim=1
         )
         # Remove improvised pitch and attack from future ticks

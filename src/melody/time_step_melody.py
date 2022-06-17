@@ -14,13 +14,12 @@ from src.utils.constants import REST_SYMBOL
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
 
-# TODO Class inheritance not great - rethink
-
 
 class TimeStepMelody(Melody):
     VERSION = '1.2'
 
-    def __init__(self, filepath, polyphonic, chord_encoding_type, chord_extension_count, duration_correction):
+    def __init__(self, filepath, polyphonic=False,
+                 chord_encoding_type='extended', chord_extension_count=7, duration_correction=0):
         super(TimeStepMelody, self).__init__(filepath, self.VERSION, chord_encoding_type, chord_extension_count)
 
         self.encoded = None

@@ -1,12 +1,12 @@
 mlflow:
-  experiment_name: duration_base
-  run_name: test metadata
+  experiment_name: duration - v2
+  run_name: add nn droupout - metadata
 
 #  experiment_name: none
 #  run_name: default
 
 dataset:
-  encoding_type: duration_base
+  encoding_type: duration
   polyphonic: False
   chord_encoding_type: extended
   chord_extension_count: 7
@@ -43,7 +43,7 @@ model:
   nn_output_size: 32
 
   embedding_dropout_rate: 0
-  nn_dropout_rate: 0
+  nn_dropout_rate: 0.25
   lstm_dropout_rate: 0
 
   normalize: False
@@ -56,7 +56,7 @@ model:
 training:
   num_batches: 20000
   batch_size: 64
-  num_epochs: 2
+  num_epochs: 30
   seed: 1234567890
   learning_rate: 0.5
   momentum: 0.9

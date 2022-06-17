@@ -4,7 +4,8 @@ import logging
 
 import torch
 
-from src.generator import DurationGenerator
+from src.model.duration import DurationBaseModel, DurationChordModel, DurationFullModel
+from src.generator import DurationBaseGenerator, DurationChordGenerator, DurationFullGenerator
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -19,21 +20,33 @@ src_path = os.path.join(dir_path, '..', '..')
 
 
 if __name__ == "__main__":
-    # TODO improve?
     model_path = os.path.join(
         src_path,
-        'mlruns', '2',
-        '603b3504919e46b3980a9ddfcc110fcf', 'artifacts',
-        '22_05_22_00_52_58_transpose_all_chord_extended_7_batchsize_128_seed_1234567890.pt'
+        'mlruns', '5',
+        '10890460b0ea43fea7e57354d0835405', 'artifacts',
+        '22_06_07_00_15_51_transpose_all_chord_extended_7_batchsize_64_seed_1234567890_best_val.pt'
     )
 
     model = torch.load(open(model_path, 'rb'))
+    model_class = type(model)
 
-    temperature = 0.01
+    metadata = 78  # TODO load from tempo mapping
+    temperature = 1.0
     sample = (False, False)
 
-    generator = DurationGenerator(
+    if model_class == DurationBaseModel:
+        generator_class = DurationBaseGenerator
+    elif model_class == DurationChordModel:
+        generator_class = DurationChordGenerator
+    elif model_class == DurationFullModel:
+        generator_class = DurationFullGenerator
+    else:
+        logger.error(f'Generator not found for {model_class}')
+        exit(1)
+
+    generator = generator_class(
         model,
+        metadata,
         temperature,
         sample,
         logger

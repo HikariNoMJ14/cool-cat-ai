@@ -18,14 +18,16 @@ src_path = os.path.join(dir_path, '..', '..', '..')
 
 class BaseModel(nn.Module):
     VOLATILE = False
-    LOG_INTERVAL = 500
+    LOG_INTERVAL = 2000
+
+    METADATA_SYMBOL = -1
+    METADATA_IDX_COUNT = 1
 
     def __init__(self, dataset=None, logger=None, save_path=os.path.join(src_path, 'results'), **kwargs):
         super(BaseModel, self).__init__()
 
         self.name = ''
         self.save_dir = os.path.join(src_path, 'results')
-
         self.model_path = None
         self.best_model_path = None
 
@@ -85,6 +87,16 @@ class BaseModel(nn.Module):
                 self.embedding_size,
                 scale_grad_by_freq=True,
                 padding_idx=self.start_pitch_symbol if kwargs['use_padding_idx'] else None
+            ),
+            nn.Dropout(self.embedding_dropout_rate)
+        )
+
+        self.metadata_encoder = nn.Sequential(
+            nn.Embedding(
+                self.metadata_size,
+                self.embedding_size,
+                scale_grad_by_freq=True,
+                padding_idx=None
             ),
             nn.Dropout(self.embedding_dropout_rate)
         )
@@ -155,14 +167,14 @@ class BaseModel(nn.Module):
 
                 self.logger.info(f'--- Epoch {epoch} ---')
 
-                train_loss, train_metrics = self.do_train(
+                train_loss, train_metrics = self._train(
                     dataset=train_dataset,
                     optimizer=optimizer,
                     batch_size=batch_size,
                     num_batches=num_batches
                 )
 
-                valid_loss, valid_metrics = self.do_evaluate(
+                valid_loss, valid_metrics = self._evaluate(
                     dataset=val_dataset,
                     batch_size=batch_size,
                     num_batches=int(num_batches // 5)
@@ -225,6 +237,8 @@ class BaseModel(nn.Module):
                 torch.save(self, f)
                 self.model_path = checkpoint_path
 
+            return True
+
         except KeyboardInterrupt:
             self.logger.info('--- Training stopped ---')
             self.logger.info(f'Time: {(time.time() - total_start_time):5.2f}s')
@@ -243,7 +257,9 @@ class BaseModel(nn.Module):
                     torch.save(self, f)
                     self.model_path = checkpoint_path
 
-    def do_train(self, dataset, batch_size, optimizer, num_batches=None):
+            return False
+
+    def _train(self, dataset, batch_size, optimizer, num_batches=None):
         self.train()
 
         loss = Metric()
@@ -299,7 +315,7 @@ class BaseModel(nn.Module):
 
         return avg_loss, avg_metrics
 
-    def do_evaluate(self, dataset, batch_size, num_batches=None):
+    def _evaluate(self, dataset, batch_size, num_batches=None):
         self.eval()
 
         loss = Metric()
@@ -344,13 +360,6 @@ class BaseModel(nn.Module):
     def mask_entry(self, tensor, masked_indices, dim):
         idx = [i for i in range(tensor.size(dim)) if i in masked_indices]
         idx = Variable(torch.LongTensor(idx).cuda(), volatile=self.VOLATILE)
-        tensor = tensor.index_select(dim, idx)
-
-        return tensor
-
-    def reverse_tensor(self, tensor, dim):
-        idx = [i for i in range(tensor.size(dim) - 1, -1, -1)]
-        idx = Variable(torch.LongTensor(idx).cuda(), volatile=self.VOLATILE).cuda()
         tensor = tensor.index_select(dim, idx)
 
         return tensor

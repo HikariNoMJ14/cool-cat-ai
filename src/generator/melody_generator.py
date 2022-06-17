@@ -2,8 +2,6 @@ import os
 import json
 
 import numpy as np
-import torch
-from torch.autograd import Variable
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
@@ -31,14 +29,6 @@ class MelodyGenerator:
 
         self.context = None
         self.melody = None
-
-    # TODO duplicate - also in model
-    def reverse_tensor(self, tensor, dim):
-        idx = [i for i in range(tensor.size(dim) - 1, -1, -1)]
-        idx = Variable(torch.LongTensor(idx), volatile=False).cuda()
-        tensor = tensor.index_select(dim, idx)
-
-        return tensor
 
     def seed_generation(self):
         pass

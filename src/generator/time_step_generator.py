@@ -8,7 +8,7 @@ from torch.functional import F
 
 from src.generator import MelodyGenerator
 from src.melody import TimeStepMelody
-from src.utils import get_chord_progressions, get_original_filepath
+from src.utils import get_chord_progressions, get_original_filepath, reverse_tensor
 from src.utils.constants import TICKS_PER_MEASURE, REST_SYMBOL
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -49,7 +49,6 @@ class TimeStepGenerator(MelodyGenerator):
 
         chord_progression = chord_progressions[melody_name]
 
-        # TODO generalize logic - also appears on time step melody
         self.melody = TimeStepMelody(None, polyphonic=False, duration_correction=0)
         self.melody.song_name = melody_name
         self.melody.set_song_structure(chord_progression)
@@ -82,7 +81,6 @@ class TimeStepGenerator(MelodyGenerator):
             chord_pitches
         ], 0).transpose(0, 1)
 
-    # TODO duplicate - similar to create_padded_tensor in model
     # TODO check whether padding logic is correct
     def get_context(self, tick):
         start_tick = tick

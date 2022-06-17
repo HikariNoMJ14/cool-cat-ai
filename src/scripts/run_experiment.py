@@ -1,14 +1,16 @@
 import os
 import sys
 import logging
+import time
 
 import torch
 import mlflow
 import yaml
 
 from src.dataset import MelodyDataset
-from src.model.duration import DurationBase, DurationChord, DurationModel
+from src.model.duration import DurationBaseModel, DurationChordModel, DurationFullModel
 from src.model.time_step.time_step_model import TimeStepModel
+
 from src.evaluation import evaluate_model
 
 logger = logging.getLogger()
@@ -93,11 +95,11 @@ if __name__ == "__main__":
     if encoding_type == 'timestep':
         model_class = TimeStepModel
     elif encoding_type == 'duration_base':
-        model_class = DurationBase
+        model_class = DurationBaseModel
     elif encoding_type == 'duration_chord':
-        model_class = DurationChord
+        model_class = DurationChordModel
     elif encoding_type == 'duration':
-        model_class = DurationModel
+        model_class = DurationFullModel
     else:
         raise Exception(f'Unknown encoding type: {encoding_type}')
 
@@ -195,7 +197,7 @@ if __name__ == "__main__":
         duration_loss_weight=duration_loss_weight
     )
 
-    optimizer = torch.optim.SGD(
+    optimizer = torch.optim.SGD(  # TODO try Adam
         model.parameters(),
         lr=learning_rate,
         momentum=momentum,
@@ -213,8 +215,9 @@ if __name__ == "__main__":
             for metric_name, metric_value in training_results.iloc[-1].iteritems():
                 mlflow.log_metric(metric_name, metric_value)
         mlflow.end_run(status)
+        time.sleep(10)
 
-    model.train_and_eval(
+    completed = model.train_and_eval(
         num_batches=num_batches,
         batch_size=batch_size,
         num_epochs=num_epochs,
@@ -224,4 +227,17 @@ if __name__ == "__main__":
         callback=callback
     )
 
-    evaluate_model(model, logger)
+    if completed:
+        metadata = 78  # TODO load from tempo mapping
+        temperature = 1.0
+        sample = (False, False)
+
+        generator = model.GENERATOR_CLASS(
+            model,
+            metadata,
+            temperature,
+            sample,
+            logger
+        )
+
+        evaluate_model(model, generator, logger, n_measures=8)

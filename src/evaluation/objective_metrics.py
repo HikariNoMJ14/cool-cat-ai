@@ -121,13 +121,15 @@ def compute_piece_chord_progression_irregularity(chord_sequence, ngram=3):
 
     return len(unique_set) / num_ngrams
 
-valid_tempos = [3, 6, 12, 24, 48, 1, 2, 4, 8, 16, 0]
-valids = []
-for r1 in valid_tempos:
-    for r2 in valid_tempos:
+
+valid_base_durations = [2, 3, 6, 12, 24, 48, 4, 8, 16]  # TODO 1 is not correct?
+valid_durations = set({})
+for r1 in valid_base_durations:
+    valid_durations.add(r1)
+
+    for r2 in valid_base_durations:
         rcalc = r1 + r2
-        if rcalc not in valids:
-            valids.append(rcalc)
+        valid_durations.add(rcalc)
 
 
 def calculate_durations_training(seqs_dur, s):
@@ -145,8 +147,8 @@ def calculate_durations_training(seqs_dur, s):
     return act_seq_durs
 
 # https://github.com/Impro-Visor/sequence_gan
-# Qualified Offset frequency (QR)
-# QR measures the frequency of note durations within valid beat ratios of
+# Qualified Offset frequency (QO)
+# QR measures the frequency of note offsets within valid beat ratios of
 # {1, 1/2, 1/4, 1/8, 1/16}, their dotted and triplet counter-
 # parts, and any tied combination of two valid ratios. This
 # generalizes beyond MuseGAN’s qualified note metric,
@@ -154,18 +156,18 @@ def calculate_durations_training(seqs_dur, s):
 # than a 32nd note.
 
 
-def calculate_QO(melody):
-    valid_count = 0.0
-    total_count = 0.0
-
-    sequence = list(melody['offset'])
-
-    for offset in sequence:
-        if offset in valids:
-            valid_count += 1
-        total_count += 1
-
-    return valid_count / total_count
+# def calculate_QO(melody):
+#     valid_count = 0.0
+#     total_count = 0.0
+#
+#     sequence = list(melody['offset'])
+#
+#     for offset in sequence:
+#         if offset in valids:
+#             valid_count += 1
+#         total_count += 1
+#
+#     return valid_count / total_count
 
 
 # https://github.com/Impro-Visor/sequence_gan
@@ -185,7 +187,7 @@ def calculate_QD(melody):
     sequence = list(melody['duration'])
 
     for duration in sequence:
-        if duration in valids:
+        if duration in valid_durations:
             valid_count += 1
         total_count += 1
 
@@ -315,8 +317,6 @@ def calculate_PV(melody, window_size):
     for start_measure in range(n_bars - window_size + 1):
         sequence = list(get_bars_crop(melody, start_measure, start_measure + window_size - 1)['pitch'] % 12)
 
-        # logger.info(sequence)
-
         if len(sequence) > 0:
             diff_pitches = set([])
             for pitch in sequence:
@@ -367,9 +367,30 @@ def calculate_RV(melody, window_size):
                 diff_durations.add(duration)
             rhythm_variation.append(float(len(diff_durations)))
 
-    # logger.info(rhythm_variation)
-
     return np.mean(rhythm_variation) if len(rhythm_variation) > 0 else 0.0
+
+
+# https://github.com/Impro-Visor/sequence_gan
+# Rhythm Variations (RV)
+# RV measures how many distinct note durations the model plays within a sequence
+# divided by the total number of notes in that sequence.
+
+
+def calculate_RVF(melody, window_size):
+    n_bars = melody['measure'].max() + 1
+
+    rhythm_variations = 0.0
+    n_windows = int(n_bars - window_size + 1)
+    for start_measure in range(n_windows):
+        sequence = list(get_bars_crop(melody, start_measure, start_measure + window_size - 1)['duration'])
+
+        if len(sequence) > 0:
+            diff_durations = set([])
+            for duration in sequence:
+                diff_durations.add(duration)
+            rhythm_variations += (float(len(diff_durations)) / len(sequence))
+
+    return rhythm_variations / n_windows
 
 
 # https://github.com/Impro-Visor/sequence_gan
@@ -411,11 +432,11 @@ def calculate_corpus_sequences(dataset, l):
 
 
 # https://github.com/Impro-Visor/sequence_gan
-# Rote Memorization frequencies (RM)
-# Given a specified length l, RM measures how frequently the model copies
+# Rote Memorization frequencies (RMF)
+# Given a specified length l, RMF measures how frequently the model copies
 # note sequences of length l from the corpus.
 
-def calculate_RM(melody, corpus_sequences, l):
+def calculate_RMF(melody, corpus_sequences, l):
     match_sequences = []
     matches = 0
     total = 0
@@ -435,6 +456,8 @@ def calculate_RM(melody, corpus_sequences, l):
             pass
 
         total += 1
+
+    return matches / total
 
 
 # https://github.com/Impro-Visor/sequence_gan
@@ -737,7 +760,7 @@ if __name__ == "__main__":
     # n, d, _, _, _, starts = get_sequences_onefile(fname, MAX_SEQ_DUR_LENGTH)
     # act_d = calculate_durations_training(d, starts)
     # for l in [3, 4, 5, 6]:
-    #     logger.info('RM', calculate_RM(df, n, act_d, length=l, doDurs=False), 'l', l)
+    #     logger.info('RMF', calculate_RMF(df, n, act_d, length=l, doDurs=False), 'l', l)
 
     # r6 = calculate_PV(df, 4)
     # r7 = calculate_RV(df, 4)
