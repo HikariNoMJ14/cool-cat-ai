@@ -15,7 +15,7 @@ from src.utils import get_chord_progressions, get_filepaths, get_original_filepa
 from src.utils.constants import OCTAVE_SEMITONES
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
-src_path = os.path.join(dir_path, '../../data', '..')
+src_path = os.path.join(dir_path, '..', '..')
 
 
 class MelodyDataset:
@@ -47,12 +47,12 @@ class MelodyDataset:
         self.melody_info = {}
         self.chord_progressions = get_chord_progressions(src_path)
 
-        if self.encoding_type == 'timestep'\
-                or self.encoding_type == 'timestep_base'\
+        if self.encoding_type == 'timestep' \
+                or self.encoding_type == 'timestep_base' \
                 or self.encoding_type == 'timestep_chord':
             self.melody_class = TimeStepMelody
-        elif self.encoding_type == 'duration'\
-                or self.encoding_type == 'duration_base'\
+        elif self.encoding_type == 'duration' \
+                or self.encoding_type == 'duration_base' \
                 or self.encoding_type == 'duration_chord':
             self.melody_class = DurationMelody
         else:
@@ -133,7 +133,7 @@ class MelodyDataset:
             (self.metadata['song_name'] == melody.song_name) &
             (self.metadata['source'] == melody.source) &
             (self.metadata['filename'] == re.sub(' -[0-9,o]*-', '', melody.filename))
-        ]
+            ]
 
         if len(metadata) == 1:
             return metadata.iloc[0, -self.METADATA_COUNT:].values.astype(int)

@@ -12,7 +12,7 @@ from src.utils.ezchord import Chord
 from src.utils.constants import OCTAVE_SEMITONES, REST_SYMBOL
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
-src_path = os.path.join(dir_path, '../../data', '..')
+src_path = os.path.join(dir_path, '..', '..')
 
 
 class DurationMelody(Melody):
