@@ -117,7 +117,7 @@ class DurationChordModel(DurationBaseModel, ChordModel):
         assert past_durations.max() <= self.duration_size
         assert past_chord_pitches.max() <= self.pitch_size
 
-        # Encode past offsets and pitches
+        # Encode past features
         past_offset_embedding = self.offset_encoder(past_offsets)
         past_pitch_embedding = self.pitch_encoder(past_pitches)
         past_duration_embedding = self.duration_encoder(past_durations)
@@ -135,7 +135,7 @@ class DurationChordModel(DurationBaseModel, ChordModel):
         present_metadata = self.extract_features(present, 'metadata', 1)
         present_chord_pitches = self.extract_chords(present, (2, 9))
 
-        # Encode present offsets and pitches
+        # Encode present features
         present_offset_embedding = self.offset_encoder(present_offsets)
         present_metadata_embedding = self.metadata_encoder(present_metadata)
 

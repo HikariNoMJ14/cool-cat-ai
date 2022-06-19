@@ -175,7 +175,7 @@ class DurationFullModel(DurationChordModel):
         assert past_durations.max() <= self.duration_size
         assert past_chord_pitches.max() <= self.pitch_size
 
-        # Encode past offsets and pitches
+        # Encode past features
         past_offset_embedding = self.offset_encoder(past_offsets)
         past_pitch_embedding = self.pitch_encoder(past_pitches)
         past_duration_embedding = self.duration_encoder(past_durations)
@@ -192,7 +192,7 @@ class DurationFullModel(DurationChordModel):
         present_offsets = self.extract_features(present, 'offset', 0)  # TODO fix
         present_chord_pitches = self.extract_chords(present, (1, 8))
 
-        # Encode present offsets and pitches
+        # Encode present features
         present_offset_embedding = self.offset_encoder(present_offsets)
 
         present_chord_pitches_embedding = self.encode_chord_pitches(present_chord_pitches)
@@ -210,7 +210,7 @@ class DurationFullModel(DurationChordModel):
         future_durations = self.convert_durations_to_ids(future_durations)
         future_chord_pitches = self.extract_chords(future, (3, 10))
 
-        # Encode future offsets and pitches
+        # Encode future features
         future_offset_embedding = self.offset_encoder(future_offsets)
         future_original_pitch_embedding = self.pitch_encoder(future_pitches)
         future_original_duration_embedding = self.duration_encoder(future_durations)
@@ -537,40 +537,3 @@ class DurationFullModel(DurationChordModel):
 
         return padded_example[None, :, :]
 
-    def normalize_embeddings(self):
-        super().normalize_embeddings()
-
-        self.duration_decoder.weight.data = F.normalize(self.duration_encoder.weight, p=2, dim=1)
-
-    def loss_function(self, prediction, label):
-        output_pitch = prediction[0]
-        output_duration = prediction[1]
-        pitch_loss = self.pitch_loss_function(output_pitch, label[:, 0])
-        duration_loss = self.duration_loss_function(output_duration, self.convert_durations_to_ids(label[:, 1]))
-
-        pitch_top1, \
-        pitch_top3, \
-        pitch_top5 = self.accuracy(
-            output_pitch,
-            label[:, 0].contiguous(),
-            topk=(1, 3, 5)
-        )
-
-        duration_top1, \
-        duration_top3, \
-        duration_top5 = self.accuracy(
-            output_duration,
-            label[:, 1].contiguous(),
-            topk=(1, 3, 5)
-        )
-
-        metrics = {
-            'pitch_loss': pitch_loss, 'duration_loss': duration_loss,
-            'pitch_top1': pitch_top1, 'pitch_top3': pitch_top3, 'pitch_top5': pitch_top5,
-            'duration_top1': duration_top1, 'duration_top3': duration_top3, 'duration_top5': duration_top5
-        }
-
-        total_loss = self.pitch_loss_weight * pitch_loss + \
-                     self.duration_loss_weight * duration_loss
-
-        return total_loss, metrics

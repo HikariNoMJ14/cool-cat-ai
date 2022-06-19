@@ -61,11 +61,6 @@ class DurationBaseModel(BaseModel):
         self.start_duration_symbol = kwargs['start_duration_symbol']
         self.end_duration_symbol = kwargs['end_duration_symbol']
 
-        self.metadata_tensor_idx = list(range(
-            self.TENSOR_IDX_MAPPING['metadata'],
-            self.TENSOR_IDX_MAPPING['metadata'] + self.METADATA_IDX_COUNT
-        ))
-
         self.setup_duration_mapping()
 
         self.duration_loss_weight = kwargs['duration_loss_weight']
@@ -171,7 +166,7 @@ class DurationBaseModel(BaseModel):
         assert past_pitches.max() <= self.pitch_size
         assert past_durations.max() <= self.duration_size
 
-        # Encode past offsets and pitches
+        # Encode past features
         past_offset_embedding = self.offset_encoder(past_offsets)
         past_pitch_embedding = self.pitch_encoder(past_pitches)
         past_duration_embedding = self.duration_encoder(past_durations)
@@ -186,7 +181,7 @@ class DurationBaseModel(BaseModel):
         present_offsets = self.extract_features(present, 'offset', 0)  # TODO fix
         present_metadata = self.extract_features(present, 'metadata', 1)
 
-        # Encode present offsets and pitches
+        # Encode present features
         present_offset_embedding = self.offset_encoder(present_offsets)
         present_metadata_embedding = self.metadata_encoder(present_metadata)
 
@@ -256,7 +251,7 @@ class DurationBaseModel(BaseModel):
         # Remove improvised pitch and duration from present tick
         present_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
                                   for feature in self.FEATURES['present']]
-        present_tensor_indices = [0] + list(range(3, 10))  # TODO fix!!!
+        present_tensor_indices = [0, 3]  # TODO fix!!!
         present = self.mask_entry(
             batch[:, middle_tick:middle_tick + 1, :],
             present_tensor_indices,
