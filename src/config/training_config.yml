@@ -1,5 +1,5 @@
 mlflow:
-  experiment_name: timestep v.2
+  experiment_name: timestep - v2
   run_name: test training
 
 #  experiment_name: none

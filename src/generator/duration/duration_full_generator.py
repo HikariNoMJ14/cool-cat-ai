@@ -202,27 +202,22 @@ class DurationFullGenerator(DurationChordGenerator):
 
         pitch_probs = F.softmax(output_pitch / self.temperature, -1)
         duration_probs = F.softmax(output_duration / self.temperature, -1)  # TODO check this works
-        # duration_probs = torch.sigmoid(output_duration)
 
         if self.sample[0]:
             new_pitch = torch.multinomial(pitch_probs, 1)
         else:
-            _, max_inds_pitch = torch.max(pitch_probs, 0)
-            new_pitch = max_inds_pitch.unsqueeze(0)
+            _, max_idx_pitch = torch.max(pitch_probs, 0)
+            new_pitch = max_idx_pitch.unsqueeze(0)
 
         if self.sample[1]:
             new_duration = torch.multinomial(duration_probs, 1)
         else:
-            _, max_inds_duration = torch.max(duration_probs, 0)
-            new_duration = max_inds_duration.unsqueeze(0)
+            _, max_idx_duration = torch.max(duration_probs, 0)
+            new_duration = max_idx_duration.unsqueeze(0)
 
         new_duration = self.model.convert_ids_to_durations(new_duration)
 
         assert 0 <= new_pitch <= 128
-
-        if new_duration == 0:
-            self.logger.error('Predicted duration is 0')
-            new_duration = torch.Tensor(1)
         assert new_duration > 0
 
         return new_pitch, new_duration

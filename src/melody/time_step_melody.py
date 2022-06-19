@@ -98,7 +98,7 @@ class TimeStepMelody(Melody):
                     raise Exception('Error!!! not mono attack on original')
 
             improvised_pitch = np.nan
-            improvised_attack = 0
+            improvised_attack = np.nan
 
             if improvised_filepath is not None:
 

@@ -91,20 +91,28 @@ if __name__ == "__main__":
     if chord_encoding_type == 'compressed' and chord_extension_count != 12:
         raise Exception(f"Chord extension count has to be 12 for encoding type 'compressed'")
 
-    if encoding_type == 'timestep':
-        from src.model.time_step.time_step_model import TimeStepModel
+    if encoding_type == 'timestep_base':
+        from src.model import TimeStepBaseModel
 
-        model_class = TimeStepModel
+        model_class = TimeStepBaseModel
+    if encoding_type == 'timestep_chord':
+        from src.model import TimeStepChordModel
+
+        model_class = TimeStepChordModel
+    if encoding_type == 'timestep':
+        from src.model import TimeStepFullModel
+
+        model_class = TimeStepFullModel
     elif encoding_type == 'duration_base':
-        from src.model.duration import DurationBaseModel
+        from src.model import DurationBaseModel
 
         model_class = DurationBaseModel
     elif encoding_type == 'duration_chord':
-        from src.model.duration import DurationChordModel
+        from src.model import DurationChordModel
 
         model_class = DurationChordModel
     elif encoding_type == 'duration':
-        from src.model.duration import DurationFullModel
+        from src.model import DurationFullModel
 
         model_class = DurationFullModel
     else:

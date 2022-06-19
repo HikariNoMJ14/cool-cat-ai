@@ -18,12 +18,10 @@ src_path = os.path.join(dir_path, '..', '..', '..')
 class DurationBaseGenerator(MelodyGenerator):
 
     def __init__(self, model, metadata, temperature, sample, logger):
-        super(DurationBaseGenerator, self).__init__(model, temperature, sample, logger)
+        super(DurationBaseGenerator, self).__init__(model, metadata, temperature, sample, logger)
 
         self.start_duration_symbol = model.start_duration_symbol
         self.end_duration_symbol = model.end_duration_symbol
-
-        self.metadata = torch.Tensor([[metadata]]).long().cuda()
 
         self.generated_improvised_ticks = np.array([])
         self.generated_improvised_offsets = np.array([])
@@ -156,14 +154,14 @@ class DurationBaseGenerator(MelodyGenerator):
         if self.sample[0]:
             new_pitch = torch.multinomial(pitch_probs, 1)
         else:
-            _, max_inds_pitch = torch.max(pitch_probs, 0)
-            new_pitch = max_inds_pitch.unsqueeze(0)
+            _, max_idx_pitch = torch.max(pitch_probs, 0)
+            new_pitch = max_idx_pitch.unsqueeze(0)
 
         if self.sample[1]:
             new_duration = torch.multinomial(duration_probs, 1)
         else:
-            _, max_inds_duration = torch.max(duration_probs, 0)
-            new_duration = max_inds_duration.unsqueeze(0)
+            _, max_idx_duration = torch.max(duration_probs, 0)
+            new_duration = max_idx_duration.unsqueeze(0)
 
         new_duration = self.model.convert_ids_to_durations(new_duration)
 

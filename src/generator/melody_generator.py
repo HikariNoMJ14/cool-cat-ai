@@ -2,6 +2,7 @@ import os
 import json
 
 import numpy as np
+import torch
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
@@ -11,9 +12,10 @@ chord_mapping_filepath = os.path.join(src_path, 'data', 'tensor_dataset', 'chord
 
 class MelodyGenerator:
 
-    def __init__(self, model, temperature, sample, logger):
+    def __init__(self, model, metadata, temperature, sample, logger):
 
         self.model = model
+        self.metadata = torch.Tensor([[metadata]]).long().cuda()
         self.sequence_size = model.sequence_size
         self.start_pitch_symbol = model.start_pitch_symbol
         self.end_pitch_symbol = model.end_pitch_symbol
