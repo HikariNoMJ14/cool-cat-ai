@@ -3,11 +3,13 @@ import sys
 import logging
 
 import torch
+import numpy as np
 
 from src.model import DurationBaseModel, DurationChordModel, DurationFullModel, \
     TimeStepBaseModel, TimeStepChordModel, TimeStepFullModel
 from src.generator import DurationBaseGenerator, DurationChordGenerator, DurationFullGenerator, \
     TimeStepBaseGenerator, TimeStepChordGenerator, TimeStepFullGenerator
+from src.utils import tempo_to_metadata
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -20,19 +22,37 @@ logger.addHandler(consoleHandler)
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
 
+seed = 36
 
 if __name__ == "__main__":
     model_path = os.path.join(
+        # time-step base
+        # src_path, 'mlruns',
+        # '11/029e40e890b847229c6419b7a40d8f89', 'artifacts',
+        # '22_06_21_01_09_26_transpose_all_chord_extended_7_batchsize_128_seed_1234567890.pt'
+
+        # time-step full
+        # src_path, 'mlruns',
+        # '10/f67d6b65ec6846b8971352b7367ab6d4', 'artifacts',
+        # '22_06_20_12_03_43_transpose_all_chord_extended_7_batchsize_128_seed_1234567890_best_val.pt'
+
+        # duration base
+        # src_path, 'mlruns',
+        # '12/08a17afd032945acb22a30eb5aea8ab9', 'artifacts',
+        # '22_06_21_21_48_06_transpose_all_chord_extended_7_batchsize_128_seed_1234567890_best_val.pt'
+
+        # duration full
         src_path, 'mlruns',
-        '8/a8e1970e4f354cc782fc6ae2491bb305', 'artifacts',
-        '22_06_18_00_22_20_transpose_all_chord_extended_7_batchsize_128_seed_1234567890_best_val.pt'
+        '5/10890460b0ea43fea7e57354d0835405', 'artifacts',
+        '22_06_07_00_15_51_transpose_all_chord_extended_7_batchsize_64_seed_1234567890_best_val.pt'
     )
 
     model = torch.load(open(model_path, 'rb'))
     model_class = type(model)
 
-    metadata = 78  # TODO load from tempo mapping
-    temperature = 1.0
+    tempo = 120
+    metadata = tempo_to_metadata(tempo)
+    temperature = 1
     sample = (False, False)
 
     if model_class == DurationBaseModel:
@@ -41,7 +61,7 @@ if __name__ == "__main__":
         generator_class = DurationChordGenerator
     elif model_class == DurationFullModel:
         generator_class = DurationFullGenerator
-    if model_class == TimeStepBaseModel:
+    elif model_class == TimeStepBaseModel:
         generator_class = TimeStepBaseGenerator
     elif model_class == TimeStepChordModel:
         generator_class = TimeStepChordGenerator
@@ -51,13 +71,16 @@ if __name__ == "__main__":
         logger.error(f'Generator not found for {model_class}')
         exit(1)
 
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+
     generator = generator_class(
         model,
-        metadata,
         temperature,
         sample,
         logger
     )
 
-    generator.generate_melody('A Felicidade', 32)
-    generator.save()
+    generator.generate_melody('A Felicidade', metadata, 32)
+    generator.save(tempo=tempo)

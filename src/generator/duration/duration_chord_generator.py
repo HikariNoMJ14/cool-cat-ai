@@ -14,10 +14,12 @@ src_path = os.path.join(dir_path, '..', '..', '..')
 
 class DurationChordGenerator(DurationBaseGenerator):
 
-    def __init__(self, model, metadata, temperature, sample, logger):
-        super(DurationChordGenerator, self).__init__(model, metadata, temperature, sample, logger)
+    def __init__(self, model, temperature, sample, logger):
+        super(DurationChordGenerator, self).__init__(model, temperature, sample, logger)
 
-    def setup_context(self, melody_name, transpose_interval=0):
+    def setup_context(self, melody_name, metadata, transpose_interval=0):
+        self.metadata = torch.Tensor([[metadata]]).long().cuda()
+
         chord_progressions = get_chord_progressions(src_path)
 
         if melody_name not in chord_progressions:

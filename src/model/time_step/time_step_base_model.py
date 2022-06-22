@@ -8,7 +8,6 @@ import torch.nn.functional as F
 from src.model import BaseModel
 from src.generator import TimeStepBaseGenerator
 
-
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..', '..')
 
@@ -143,7 +142,7 @@ class TimeStepBaseModel(BaseModel):
     def prepare_present_nn_input(self, present):
         # Extract features from present tensor
         present_offsets = self.extract_features(present, 'offset', 0)  # TODO fix
-        present_metadata = self.extract_features(present, 'metadata', 3)
+        present_metadata = self.extract_features(present, 'metadata', 1)
 
         # Encode present features
         present_offset_embedding = self.offset_encoder(present_offsets)
@@ -211,11 +210,13 @@ class TimeStepBaseModel(BaseModel):
             dim=2
         )
 
+        self.logger.debug(past[0, :, :])
+
         # Remove improvised pitch and attack from present tick
         # present_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
         #                           for feature in self.FEATURES['present']]
         # present_tensor_indices += self.chord_tensor_idx
-        present_tensor_indices = [0, 5]
+        present_tensor_indices = [0, 3]
         present = self.mask_entry(
             batch[:, middle_tick:middle_tick + 1, :],
             present_tensor_indices,
@@ -233,14 +234,10 @@ class TimeStepBaseModel(BaseModel):
         )
         label = label.view(batch_size, -1)
 
-        assert present[:, :, 1].eq(self.start_pitch_symbol).count_nonzero() == 0 and \
-               present[:, :, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
         assert label[:, 0].eq(self.start_pitch_symbol).count_nonzero() == 0 and \
                label[:, 0].eq(self.end_pitch_symbol).count_nonzero() == 0
-        assert present[:, :, 2].eq(self.start_attack_symbol).count_nonzero() == 0 and \
-               present[:, :, 2].eq(self.end_attack_symbol).count_nonzero() == 0
-        assert label[:, 0].eq(self.start_attack_symbol).count_nonzero() == 0 and \
-               label[:, 0].eq(self.end_attack_symbol).count_nonzero() == 0
+        assert label[:, 1].eq(self.start_attack_symbol).count_nonzero() == 0 and \
+               label[:, 1].eq(self.end_attack_symbol).count_nonzero() == 0
 
         if self.start_pitch_symbol != self.end_pitch_symbol:
             assert past[:, :, 1].eq(self.end_pitch_symbol).count_nonzero() == 0

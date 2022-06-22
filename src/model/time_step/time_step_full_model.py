@@ -163,7 +163,7 @@ class TimeStepFullModel(TimeStepChordModel):
         past_improvised_attacks = self.extract_features(past, 'improvised_attack', 2)
         past_original_pitches = self.extract_features(past, 'original_pitch', 3)
         past_original_attacks = self.extract_features(past, 'original_attack', 4)
-        past_chord_pitches = self.extract_chords(past, (6, 13))
+        past_chord_pitches = self.extract_chords(past, (5, 12))
 
         # Encode past features
         past_offset_embedding = self.offset_encoder(past_offsets)
@@ -278,7 +278,7 @@ class TimeStepFullModel(TimeStepChordModel):
         # past_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
         #                        for feature in self.FEATURES['past']]
         # past_tensor_indices += self.chord_tensor_idx
-        past_tensor_indices = list(range(0, 13))
+        past_tensor_indices = list(range(0, 5)) + list(range(6, 13))
         past = self.mask_entry(
             batch[:, :middle_tick, :],
             past_tensor_indices,
@@ -335,7 +335,7 @@ class TimeStepFullModel(TimeStepChordModel):
             assert past[:, :, 1].eq(self.end_pitch_symbol).count_nonzero() == 0
             assert future[:, :, 1].eq(self.start_pitch_symbol).count_nonzero() == 0
             assert past[:, :, 2].eq(self.end_attack_symbol).count_nonzero() == 0
-            assert future[:, :, 3].eq(self.start_attack_symbol).count_nonzero() == 0
+            assert future[:, :, 2].eq(self.start_attack_symbol).count_nonzero() == 0
 
         return (past, present, future), label
 

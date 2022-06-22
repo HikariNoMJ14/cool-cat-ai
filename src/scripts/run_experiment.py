@@ -95,11 +95,11 @@ if __name__ == "__main__":
         from src.model import TimeStepBaseModel
 
         model_class = TimeStepBaseModel
-    if encoding_type == 'timestep_chord':
+    elif encoding_type == 'timestep_chord':
         from src.model import TimeStepChordModel
 
         model_class = TimeStepChordModel
-    if encoding_type == 'timestep':
+    elif encoding_type == 'timestep':
         from src.model import TimeStepFullModel
 
         model_class = TimeStepFullModel
@@ -246,17 +246,15 @@ if __name__ == "__main__":
         callback=callback
     )
 
-    if completed:
-        metadata = 78  # TODO load from tempo mapping
-        temperature = 1.0
-        sample = (False, False)
-
-        generator = model.GENERATOR_CLASS(
-            model,
-            metadata,
-            temperature,
-            sample,
-            logger
-        )
-
-        evaluate_model(model, generator, logger, n_measures=8)
+    # if completed:
+    #     temperature = 1.0
+    #     sample = (False, False)
+    #
+    #     generator = model.GENERATOR_CLASS(
+    #         model,
+    #         temperature,
+    #         sample,
+    #         logger
+    #     )
+    #
+    #     evaluate_model(model, generator, logger, n_measures=8)

@@ -15,8 +15,8 @@ src_path = os.path.join(dir_path, '..', '..', '..')
 
 class DurationFullGenerator(DurationChordGenerator):
 
-    def __init__(self, model, metadata, temperature, sample, logger):
-        super(DurationFullGenerator, self).__init__(model, metadata, temperature, sample, logger)
+    def __init__(self, model, temperature, sample, logger):
+        super(DurationFullGenerator, self).__init__(model, temperature, sample, logger)
 
         self.start_duration_symbol = model.start_duration_symbol
         self.end_duration_symbol = model.end_duration_symbol
@@ -25,7 +25,9 @@ class DurationFullGenerator(DurationChordGenerator):
         self.generated_improvised_offsets = np.array([])
         self.generated_improvised_durations = np.array([])
 
-    def setup_context(self, melody_name, transpose_interval=0):
+    def setup_context(self, melody_name, metadata, transpose_interval=0):
+        self.metadata = torch.Tensor([[metadata]]).long().cuda()
+
         chord_progressions = get_chord_progressions(src_path)
         original_filepath = get_original_filepath(melody_name)
 

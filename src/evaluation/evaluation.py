@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 from src.melody import Melody
-from src.utils import get_filepaths
+from src.utils import get_filepaths, random_metadata
 from src.evaluation import objective_metrics
 
 SEQUENCE_LENGTHS = [2, 3, 4, 5, 6, 7]
@@ -66,7 +66,7 @@ def evaluate_melody(filepath, corpus_sequences=None):
     return results
 
 
-def evaluate_model(model, generator, logger, n_measures=8, unseen=False):
+def evaluate_model(model, generator, logger, n_measures=8, unseen=False, n_samples=100):
     metrics = {}
 
     corpus_sequences = {}
@@ -81,13 +81,17 @@ def evaluate_model(model, generator, logger, n_measures=8, unseen=False):
     logger.debug(f'U: {unseen_filepaths}')
 
     seen_gen_filepaths = []
-    for filepath in seen_filepaths:
-        logger.debug(f"Seen: {filepath}")
-        generator.generate_melody(filepath, n_measures)
 
-        seen_gen_filepaths.append(
-            generator.save('seen')
-        )
+    for i in range(n_samples):
+        filepath_idx = int(np.floor(np.random.random() * len(seen_filepaths)))
+        filepath = list(seen_filepaths)[filepath_idx]
+        tempo, metadata = random_metadata()
+
+        logger.debug(f"Seen: {filepath}, tempo {tempo}")
+        generator.generate_melody(filepath, metadata, n_measures)
+
+        seen_gen_filepath = generator.save(tempo=tempo, save_path='seen')
+        seen_gen_filepaths.append(seen_gen_filepath)
 
     logger.info('Seen melodies')
     for generated_filepath in seen_gen_filepaths:
@@ -99,28 +103,38 @@ def evaluate_model(model, generator, logger, n_measures=8, unseen=False):
     metrics_df.to_csv(os.path.join(os.path.dirname(model.best_model_path), 'evaluation_seen.csv'))
 
     for metric in EVALUATION_METRICS:
-        logger.info(f'{metric} - {metrics_df[metric].mean():5.2f} - {metrics_df[metric].std():5.2f}')
+        if metric in metrics_df.columns:
+            logger.info(f'{metric} - {metrics_df[metric].mean():5.2f} - {metrics_df[metric].std():5.2f}')
+        else:
+            logger.error(f'{metric} has not been calculated')
 
     if unseen:
         unseen_gen_filepaths = []
-        for filepath in unseen_filepaths:
+
+        for i in range(n_samples):
+            filepath_idx = np.random.random(len(seen_filepaths))
+            filepath = list(seen_filepaths)[filepath_idx]
+            tempo, metadata = random_metadata()
+
             logger.debug(f"Unseen: {filepath}")
-            generator.generate_melody(filepath, 32)
+            generator.generate_melody(filepath, metadata, n_measures)
+
+            unseen_gen_filepath = generator.save(tempo=tempo, save_path='unseen')
             unseen_gen_filepaths.append(
-                generator.save('unseen')
+                unseen_gen_filepath
             )
 
-            logger.info('Unseen melodies')
-            for generated_filepath in unseen_gen_filepaths:
-                metrics[generated_filepath] = evaluate_melody(generated_filepath)
+        logger.info('Unseen melodies')
+        for generated_filepath in unseen_gen_filepaths:
+            metrics[generated_filepath] = evaluate_melody(generated_filepath)
 
-            metrics_df = pd.DataFrame().from_dict(metrics).T
-            metrics_df['HC-m'] = metrics_df['HC'].apply(np.mean)
+        metrics_df = pd.DataFrame().from_dict(metrics).T
+        metrics_df['HC-m'] = metrics_df['HC'].apply(np.mean)
 
-            metrics_df.to_csv(os.path.join(os.path.dirname(model.best_model_path), 'evaluation_unseen.csv'))
+        metrics_df.to_csv(os.path.join(os.path.dirname(model.best_model_path), 'evaluation_unseen.csv'))
 
-            for metric in EVALUATION_METRICS:
-                if metric in metrics_df.columns:
-                    logger.info(f'{metric} - {metrics_df[metric].mean():5.2f} - {metrics_df[metric].std():5.2f}')
-                else:
-                    logger.error(f'{metric} has not been calculated')
+        for metric in EVALUATION_METRICS:
+            if metric in metrics_df.columns:
+                logger.info(f'{metric} - {metrics_df[metric].mean():5.2f} - {metrics_df[metric].std():5.2f}')
+            else:
+                logger.error(f'{metric} has not been calculated')

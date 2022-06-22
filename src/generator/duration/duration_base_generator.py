@@ -17,8 +17,9 @@ src_path = os.path.join(dir_path, '..', '..', '..')
 
 class DurationBaseGenerator(MelodyGenerator):
 
-    def __init__(self, model, metadata, temperature, sample, logger):
-        super(DurationBaseGenerator, self).__init__(model, metadata, temperature, sample, logger)
+    def __init__(self, model, temperature, sample, logger):
+        super(DurationBaseGenerator, self).__init__(model, temperature, sample, logger)
+        self.metadata = None
 
         self.start_duration_symbol = model.start_duration_symbol
         self.end_duration_symbol = model.end_duration_symbol
@@ -27,8 +28,8 @@ class DurationBaseGenerator(MelodyGenerator):
         self.generated_improvised_offsets = np.array([])
         self.generated_improvised_durations = np.array([])
 
-    def generate_melody(self, melody_name, n_measures):
-        super().generate_melody(melody_name, n_measures)
+    def generate_melody(self, melody_name, metadata, n_measures):
+        super().generate_melody(melody_name, metadata, n_measures)
 
         tick = 0
 
@@ -48,7 +49,9 @@ class DurationBaseGenerator(MelodyGenerator):
 
                 tick += generated_duration.item()
 
-    def setup_context(self, melody_name):
+    def setup_context(self, melody_name, metadata):
+        self.metadata = torch.Tensor([[metadata]]).long().cuda()
+
         chord_progressions = get_chord_progressions(src_path)
 
         if melody_name not in chord_progressions:
@@ -165,16 +168,14 @@ class DurationBaseGenerator(MelodyGenerator):
 
         new_duration = self.model.convert_ids_to_durations(new_duration)
 
-        assert 0 <= new_pitch <= 128
+        self.logger.debug([new_pitch.item(), new_duration.item()])
 
-        if new_duration == 0:
-            self.logger.error('Predicted duration is 0')
-            new_duration = torch.Tensor(1)
+        assert 0 <= new_pitch <= 128
         assert new_duration > 0
 
         return new_pitch, new_duration
 
-    def save(self, save_path=None):
+    def save(self, tempo=120, save_path=None):
         new_melody = pd.DataFrame()
         new_melody['ticks'] = pd.Series(data=self.generated_improvised_ticks)
         new_melody['offset'] = pd.Series(data=self.generated_improvised_offsets)
@@ -208,7 +209,7 @@ class DurationBaseGenerator(MelodyGenerator):
         out_filepath_mid = os.path.join(out_path, filename_mid)
         out_filepath_csv = os.path.join(out_path, filename_csv)
 
-        self.melody.to_midi(out_filepath_mid, 120)  # TODO convert from metadata mapping
+        self.melody.to_midi(out_filepath_mid, tempo)
         self.melody.encoded.to_csv(out_filepath_csv)
 
         return out_filepath_csv

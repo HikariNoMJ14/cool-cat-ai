@@ -118,7 +118,7 @@ class DurationBaseModel(BaseModel):
         )
 
         merge_nn_input_size = self.lstm_hidden_size + self.nn_output_size
-        merge_nn_output_size = self.embedding_size + self.duration_size
+        merge_nn_output_size = self.embedding_size + self.embedding_size
 
         self.merge_nn = nn.Sequential(
             nn.Linear(merge_nn_input_size, self.nn_hidden_size),

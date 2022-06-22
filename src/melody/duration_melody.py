@@ -9,7 +9,7 @@ from src.utils import is_weakly_polyphonic, is_strongly_polyphonic, \
     remove_weak_polyphony, remove_strong_polyphony, \
     flatten_chord_progression
 from src.utils.ezchord import Chord
-from src.utils.constants import OCTAVE_SEMITONES, REST_PITCH_SYMBOL
+from src.utils.constants import OCTAVE_SEMITONES, REST_PITCH_SYMBOL, TICKS_PER_MEASURE
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
@@ -265,35 +265,36 @@ class DurationMelody(Melody):
             out_filepath: str,
             out_bpm: int = 120,
     ):
-        melody_instrument_name = "Tenor Sax"
+        melody_instrument_name = "Vibraphone"
         chord_instrument_name = "Acoustic Grand Piano"
+        drum_instrument_name = "Acoustic Grand Piano"
 
         p = pm.PrettyMIDI()
         ts = pm.TimeSignature(
             self.chord_progression_time_signature[0],
             self.chord_progression_time_signature[1],
-            0)
+            0
+        )
 
         p.time_signature_changes.append(ts)
 
+        max_measure = (self.encoded['ticks'] // TICKS_PER_MEASURE).max()
+
+        # Add melody
         melody = pm.Instrument(
             program=pm.instrument_name_to_program(melody_instrument_name),
             name="melody"
         )
-        chords = pm.Instrument(
-            program=pm.instrument_name_to_program(chord_instrument_name),
-            name="chords"
-        )
 
-        multiplier = (out_bpm / 60) / (self.FINAL_TICKS_PER_BEAT * self.chord_progression_time_signature[0])
+        melody_multiplier = (240 / out_bpm) / (self.FINAL_TICKS_PER_BEAT * self.chord_progression_time_signature[0])
 
         notes_df = self.encoded[~np.isnan(self.encoded['improvised_pitch'])]
         notes_df.reset_index(inplace=True)
 
         for i, row in notes_df.iterrows():
             duration = row['improvised_duration']
-            start = row.ticks * multiplier
-            end = start + duration * multiplier
+            start = row.ticks * melody_multiplier
+            end = start + duration * melody_multiplier
 
             note = pm.Note(
                 velocity=127,
@@ -305,8 +306,17 @@ class DurationMelody(Melody):
 
         p.instruments.append(melody)
 
+        # Add chords
         start = 0
-        beat_n = 1
+        beat_n = 0
+        previous_chord_name = ""
+
+        chords = pm.Instrument(
+            program=pm.instrument_name_to_program(chord_instrument_name),
+            name="chords"
+        )
+
+        chord_multiplier = 60 / out_bpm
 
         # TODO Generalize for melodies longer than one cycle
         for section in self.song_structure['sections']:
@@ -316,7 +326,7 @@ class DurationMelody(Melody):
                 # Use the tonic on the first beat, the fifth on the third beat
                 # and the full chord (minus the fifth) on beats 2 and 4
                 # TODO only works with 4/4
-                if beat_n == 1:
+                if beat_n == 0:
                     note = pm.Note(
                         velocity=64,
                         pitch=int(chord_notes[0]),
@@ -329,12 +339,12 @@ class DurationMelody(Melody):
                     chord_annotation = pm.Lyric(chord_name, start)
 
                     p.lyrics.append(chord_annotation)
-                elif beat_n == 3:
+                elif beat_n == 2:
                     note = pm.Note(
                         velocity=64,
                         pitch=int(chord_notes[3]) - OCTAVE_SEMITONES * 2,
                         start=start,
-                        end=start + 0.25,
+                        end=start + (chord_multiplier / 2),
                     )
                     chords.notes.append(note)
                 else:
@@ -344,13 +354,89 @@ class DurationMelody(Melody):
                                 velocity=64,
                                 pitch=int(chord_note),
                                 start=start,
-                                end=start + 0.25,
+                                end=start + (chord_multiplier / 2),
                             )
                             chords.notes.append(note)
 
-                start += 0.5
+                if beat_n == 0 or chord_name != previous_chord_name:
+                    # Add chord annotation
+                    chord_annotation = pm.Lyric(chord_name, start)
+
+                    p.lyrics.append(chord_annotation)
+                    previous_chord_name = chord_name
+
+                start += chord_multiplier
                 beat_n = (beat_n + 1) % 4
 
         p.instruments.append(chords)
+
+        # Add drums
+        start = 0
+        beat_n = 0
+
+        drums = pm.Instrument(
+            program=pm.instrument_name_to_program(drum_instrument_name),
+            is_drum=True,
+            name="drums"
+        )
+
+        drums_multiplier = 60 / out_bpm
+
+        measure = 0
+        while measure <= max_measure:
+            # Add on-beat ride cymbal
+            note = pm.Note(
+                velocity=72,
+                pitch=pm.drum_name_to_note_number("Ride Cymbal 1"),
+                start=start,
+                end=start + (drums_multiplier / 2),
+            )
+            drums.notes.append(note)
+
+            # Add 'swung' ride cymbal
+            if beat_n == 0 or beat_n == 2:
+                note = pm.Note(
+                    velocity=72,
+                    pitch=pm.drum_name_to_note_number("Ride Cymbal 1"),
+                    start=start - 0.1333,
+                    end=start + (drums_multiplier / 2) - 0.1333,
+                )
+                drums.notes.append(note)
+
+            # Add bass drum
+            if beat_n == 0:
+                note = pm.Note(
+                    velocity=64,
+                    pitch=pm.drum_name_to_note_number("Acoustic Bass Drum"),
+                    start=start,
+                    end=start + (drums_multiplier / 2),
+                )
+                drums.notes.append(note)
+
+                # Add crash cymbal
+                if measure % 8 == 0 and measure != 0:
+                    note = pm.Note(
+                        velocity=72,
+                        pitch=pm.drum_name_to_note_number("Crash Cymbal 1"),
+                        start=start,
+                        end=start + (drums_multiplier / 2),
+                    )
+                    drums.notes.append(note)
+
+            # Add hi-hat pedal
+            if beat_n == 1 or beat_n == 3:
+                note = pm.Note(
+                    velocity=96,
+                    pitch=pm.drum_name_to_note_number("Pedal Hi-hat"),
+                    start=start,
+                    end=start + (drums_multiplier / 2),
+                )
+                drums.notes.append(note)
+
+            measure += 1 / 4
+            start += drums_multiplier
+            beat_n = (beat_n + 1) % 4
+
+        p.instruments.append(drums)
 
         p.write(out_filepath)

@@ -12,10 +12,9 @@ chord_mapping_filepath = os.path.join(src_path, 'data', 'tensor_dataset', 'chord
 
 class MelodyGenerator:
 
-    def __init__(self, model, metadata, temperature, sample, logger):
+    def __init__(self, model, temperature, sample, logger):
 
         self.model = model
-        self.metadata = torch.Tensor([[metadata]]).long().cuda()
         self.sequence_size = model.sequence_size
         self.start_pitch_symbol = model.start_pitch_symbol
         self.end_pitch_symbol = model.end_pitch_symbol
@@ -32,11 +31,7 @@ class MelodyGenerator:
         self.context = None
         self.melody = None
 
-    def seed_generation(self):
-        pass
-
-    def generate_melody(self, melody_name, n_measures):
-        self.setup_context(melody_name)
-        self.seed_generation()
+    def generate_melody(self, melody_name, metadata, n_measures):
+        self.setup_context(melody_name, metadata)
 
 

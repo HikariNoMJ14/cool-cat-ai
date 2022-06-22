@@ -15,15 +15,17 @@ src_path = os.path.join(dir_path, '..', '..', '..')
 
 class TimeStepFullGenerator(TimeStepChordGenerator):
 
-    def __init__(self, model, metadata, temperature, sample, logger):
-        super(TimeStepFullGenerator, self).__init__(model, metadata, temperature, sample, logger)
+    def __init__(self, model, temperature, sample, logger):
+        super(TimeStepFullGenerator, self).__init__(model, temperature, sample, logger)
 
         self.start_attack_symbol = model.start_attack_symbol
         self.end_attack_symbol = model.end_attack_symbol
 
         self.generated_improvised_attacks = np.array([])
 
-    def setup_context(self, melody_name, transpose_interval=0):
+    def setup_context(self, melody_name, metadata, transpose_interval=0):
+        self.metadata = torch.Tensor([[metadata]]).long().cuda()
+
         chord_progressions = get_chord_progressions(src_path)
         original_filepath = get_original_filepath(melody_name)
 
@@ -65,7 +67,6 @@ class TimeStepFullGenerator(TimeStepChordGenerator):
             chord_pitches
         ], 0).transpose(0, 1)
 
-    # TODO check whether padding logic is correct
     def get_context(self, tick):
         start_tick = tick
         end_tick = tick + self.sequence_size
@@ -180,6 +181,8 @@ class TimeStepFullGenerator(TimeStepChordGenerator):
         else:
             _, max_idx_attack = torch.max(attack_probs, 0)
             new_attack = max_idx_attack.unsqueeze(0)
+
+        self.logger.debug([new_pitch.item(), new_attack.item()])
 
         assert 0 <= new_pitch <= 128
         assert 0 <= new_attack <= 2
