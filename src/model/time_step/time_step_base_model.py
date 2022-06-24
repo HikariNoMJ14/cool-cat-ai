@@ -49,6 +49,8 @@ class TimeStepBaseModel(BaseModel):
 
     GENERATOR_CLASS = TimeStepBaseGenerator
 
+    ENCODING_TYPE = 'timestep'
+
     def __init__(self, dataset=None, logger=None, save_path=os.path.join(src_path, 'results'), **kwargs):
         super(TimeStepBaseModel, self).__init__(dataset, logger, save_path, **kwargs)
 
@@ -209,8 +211,6 @@ class TimeStepBaseModel(BaseModel):
             past_tensor_indices,
             dim=2
         )
-
-        self.logger.debug(past[0, :, :])
 
         # Remove improvised pitch and attack from present tick
         # present_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]

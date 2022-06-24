@@ -8,10 +8,9 @@ import mlflow
 import yaml
 
 from src.dataset import MelodyDataset
-from src.evaluation import evaluate_model
 
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 logFormatter = logging.Formatter('%(levelname)7s - %(message)s')
 
 consoleHandler = logging.StreamHandler(sys.stdout)

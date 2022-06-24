@@ -152,7 +152,7 @@ class DurationBaseGenerator(MelodyGenerator):
         output_duration = output_duration.squeeze()
 
         pitch_probs = F.softmax(output_pitch / self.temperature, -1)
-        duration_probs = torch.sigmoid(output_duration)
+        duration_probs = F.softmax(output_duration / self.temperature, -1)
 
         if self.sample[0]:
             new_pitch = torch.multinomial(pitch_probs, 1)

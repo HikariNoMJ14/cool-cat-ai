@@ -48,6 +48,8 @@ class DurationBaseModel(BaseModel):
 
     PLOTTED_METRICS = ['loss', 'pitch_loss', 'duration_loss']
 
+    ENCODING_TYPE = 'duration'
+
     GENERATOR_CLASS = DurationBaseGenerator
 
     def __init__(self, dataset=None, logger=None, save_path=os.path.join(src_path, 'results'), **kwargs):
@@ -400,6 +402,7 @@ class DurationBaseModel(BaseModel):
     def loss_function(self, prediction, label):
         output_pitch = prediction[0]
         output_duration = prediction[1]
+
         pitch_loss = self.pitch_loss_function(output_pitch, label[:, 0])
         duration_loss = self.duration_loss_function(output_duration, self.convert_durations_to_ids(label[:, 1]))
 

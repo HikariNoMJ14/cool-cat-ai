@@ -1,19 +1,19 @@
 mlflow:
-  experiment_name: duration chord - v2
-  run_name: test training
+  experiment_name: timestep - v2
+  run_name: test plagiarism
 
 #  experiment_name: none
 #  run_name: default
 
 dataset:
-  encoding_type: duration_chord
+  encoding_type: timestep
   polyphonic: False
   chord_encoding_type: extended
   chord_extension_count: 7
   duration_correction: 0
   transpose_mode: all
-#  sequence_size: 193
-  sequence_size: 41
+  sequence_size: 193
+#  sequence_size: 41
 
 
 #Learning rate 5e−1
@@ -44,23 +44,23 @@ model:
   nn_output_size: 32
 
   embedding_dropout_rate: 0
-  nn_dropout_rate: 0.25
+  nn_dropout_rate: 0
   lstm_dropout_rate: 0
 
   normalize: False
   gradient_clipping: 0.25
 
-#  pitch_loss_weight: 0.7
+  pitch_loss_weight: 0.7
   attack_loss_weight: 0.3
 
-  pitch_loss_weight: 0.6
+#  pitch_loss_weight: 0.6
   duration_loss_weight: 0.4
 
 training:
   num_batches: 20000
   batch_size: 128
   num_epochs: 30
-  seed: 1234567890
+  seed: 9876543
   learning_rate: 0.5
   momentum: 0.9
   weight_decay: 1e-6

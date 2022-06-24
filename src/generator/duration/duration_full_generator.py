@@ -135,6 +135,7 @@ class DurationFullGenerator(DurationChordGenerator):
         padded_original_chord_pitches.append(center_original_chord_pitches)
 
         if end_idx > length:
+            self.logger.info('future!')
             last_offset = int(center_original_offsets[:, -1])
             right_padded_offsets = torch.from_numpy(
                 np.array([np.arange(last_offset + 1, last_offset + end_idx - length + 1, 1) % TICKS_PER_MEASURE])

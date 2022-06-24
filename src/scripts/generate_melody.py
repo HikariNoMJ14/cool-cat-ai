@@ -32,9 +32,11 @@ if __name__ == "__main__":
         # '22_06_21_01_09_26_transpose_all_chord_extended_7_batchsize_128_seed_1234567890.pt'
 
         # time-step full
-        # src_path, 'mlruns',
+        src_path, 'mlruns',
         # '10/f67d6b65ec6846b8971352b7367ab6d4', 'artifacts',
         # '22_06_20_12_03_43_transpose_all_chord_extended_7_batchsize_128_seed_1234567890_best_val.pt'
+        '10/ff85d1433722430caf4acad32e48e80c/artifacts',
+        '22_06_22_23_33_22_transpose_all_chord_extended_7_batchsize_128_seed_1234567890_best_val.pt'
 
         # duration base
         # src_path, 'mlruns',
@@ -42,9 +44,9 @@ if __name__ == "__main__":
         # '22_06_21_21_48_06_transpose_all_chord_extended_7_batchsize_128_seed_1234567890_best_val.pt'
 
         # duration full
-        src_path, 'mlruns',
-        '5/10890460b0ea43fea7e57354d0835405', 'artifacts',
-        '22_06_07_00_15_51_transpose_all_chord_extended_7_batchsize_64_seed_1234567890_best_val.pt'
+        # src_path, 'mlruns',
+        # '5/10890460b0ea43fea7e57354d0835405', 'artifacts',
+        # '22_06_07_00_15_51_transpose_all_chord_extended_7_batchsize_64_seed_1234567890_best_val.pt'
     )
 
     model = torch.load(open(model_path, 'rb'))
@@ -82,5 +84,5 @@ if __name__ == "__main__":
         logger
     )
 
-    generator.generate_melody('A Felicidade', metadata, 32)
+    generator.generate_melody('They Can\'t Take That Away From Me', metadata, 32)
     generator.save(tempo=tempo)

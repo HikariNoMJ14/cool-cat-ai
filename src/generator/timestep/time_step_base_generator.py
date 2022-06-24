@@ -66,10 +66,10 @@ class TimeStepBaseGenerator(MelodyGenerator):
         ], 0).transpose(0, 1)
 
     def get_context(self, tick):
-        start_tick = tick
-        end_tick = tick + self.sequence_size
-        length = self.context.size(0)
         middle_tick = self.sequence_size // 2
+        start_tick = tick - middle_tick
+        end_tick = tick + middle_tick + 1  # TODO only works for odd numbers
+        length = self.context.size(0)
 
         common_sliced_data = self.context[np.arange(start_tick, end_tick) % length]
 
@@ -78,39 +78,27 @@ class TimeStepBaseGenerator(MelodyGenerator):
         padded_improvised_pitches = []
         padded_improvised_attacks = []
 
-        if tick < middle_tick:
+        if start_tick < 0:
             left_improvised_pitches = torch.from_numpy(
                 np.array([self.start_pitch_symbol])
-            ).long().clone().repeat(middle_tick - start_tick, 1).transpose(0, 1).cuda()
+            ).long().clone().repeat(-start_tick, 1).transpose(0, 1).cuda()
 
             left_improvised_attacks = torch.from_numpy(
                 np.array([self.start_attack_symbol])
-            ).long().clone().repeat(middle_tick - start_tick, 1).transpose(0, 1).cuda()
+            ).long().clone().repeat(-start_tick, 1).transpose(0, 1).cuda()
 
             padded_improvised_pitches.append(left_improvised_pitches)
             padded_improvised_attacks.append(left_improvised_attacks)
 
         center_improvised_pitches = torch.from_numpy(
-            self.generated_improvised_pitches
+            self.generated_improvised_pitches[-middle_tick:]
         ).long().clone()[None, :].cuda()
         center_improvised_attacks = torch.from_numpy(
-            self.generated_improvised_attacks
+            self.generated_improvised_attacks[-middle_tick:]
         ).long().clone()[None, :].cuda()
 
         padded_improvised_pitches.append(center_improvised_pitches)
         padded_improvised_attacks.append(center_improvised_attacks)
-
-        if tick > middle_tick:
-            right_improvised_pitches = torch.from_numpy(
-                np.array([self.end_pitch_symbol])
-            ).long().clone().repeat(end_tick - middle_tick, 1).transpose(0, 1).cuda()
-
-            right_improvised_attacks = torch.from_numpy(
-                np.array([self.end_attack_symbol])
-            ).long().clone().repeat(end_tick - middle_tick, 1).transpose(0, 1).cuda()
-
-            padded_improvised_pitches.append(right_improvised_pitches)
-            padded_improvised_attacks.append(right_improvised_attacks)
 
         improvised_pitches = torch.cat(padded_improvised_pitches, 1)
         improvised_attacks = torch.cat(padded_improvised_attacks, 1)
@@ -167,9 +155,10 @@ class TimeStepBaseGenerator(MelodyGenerator):
 
     def save(self, tempo=120, save_path=None):
         new_melody = pd.DataFrame()
-        ticks = range(self.generated_improvised_pitches.shape[0])
+        ticks = np.array(range(self.generated_improvised_pitches.shape[0]))
+        offsets = np.array(range(self.generated_improvised_pitches.shape[0])) % TICKS_PER_MEASURE
 
-        new_melody['offset'] = pd.Series(data=list(ticks))
+        new_melody['offset'] = pd.Series(data=offsets)
         new_melody['improvised_pitch'] = pd.Series(data=self.generated_improvised_pitches).replace(
             REST_PITCH_SYMBOL, np.nan)
         new_melody['improvised_attack'] = pd.Series(data=self.generated_improvised_attacks).replace(

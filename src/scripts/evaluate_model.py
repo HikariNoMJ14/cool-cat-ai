@@ -7,7 +7,7 @@ import torch
 from src.evaluation import evaluate_model
 
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 logFormatter = logging.Formatter('%(levelname)7s - %(message)s')
 
 consoleHandler = logging.StreamHandler(sys.stdout)
@@ -25,25 +25,29 @@ if __name__ == "__main__":
         # '22_06_21_01_09_26_transpose_all_chord_extended_7_batchsize_128_seed_1234567890.pt'
 
         # time-step full
-        src_path, 'mlruns',
-        '10/f67d6b65ec6846b8971352b7367ab6d4', 'artifacts',
-        '22_06_20_12_03_43_transpose_all_chord_extended_7_batchsize_128_seed_1234567890_best_val.pt'
+        # src_path, 'mlruns',
+        # '10/ff85d1433722430caf4acad32e48e80c', 'artifacts',
+        # '22_06_22_23_33_22_transpose_all_chord_extended_7_batchsize_128_seed_1234567890_best_val.pt'
 
         # duration base
         # src_path, 'mlruns',
         # '12/08a17afd032945acb22a30eb5aea8ab9', 'artifacts',
         # '22_06_21_21_48_06_transpose_all_chord_extended_7_batchsize_128_seed_1234567890_best_val.pt'
 
-        # duration full
+        # duration chord
         # src_path, 'mlruns',
-        # '5/10890460b0ea43fea7e57354d0835405', 'artifacts',
+        # '13/d6c446b7dd8e47799a3ce0ae3cd6cecc', 'artifacts',
+        # '22_06_22_14_35_54_transpose_all_chord_extended_7_batchsize_128_seed_1234567890_best_val.pt'
+
+        # duration full
+        src_path, 'mlruns',
+        # '5/10890460b0ea43fea7e57354d0835405/artifacts',
         # '22_06_07_00_15_51_transpose_all_chord_extended_7_batchsize_64_seed_1234567890_best_val.pt'
     )
 
     model = torch.load(open(model_path, 'rb'))
 
-    metadata = 78  # TODO load from tempo mapping
-    temperature = 1.0
+    temperature = 1
     sample = (False, False)
 
     generator = model.GENERATOR_CLASS(
@@ -53,5 +57,5 @@ if __name__ == "__main__":
         logger
     )
 
-    evaluate_model(model, generator, logger)
+    evaluate_model(model, generator, logger, n_samples=100)
 

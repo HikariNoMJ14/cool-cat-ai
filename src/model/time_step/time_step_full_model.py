@@ -275,26 +275,12 @@ class TimeStepFullModel(TimeStepChordModel):
             assert batch[:, :middle_tick, 2].eq(self.end_attack_symbol).count_nonzero() == 0
             assert batch[:, middle_tick + 1:, 2].eq(self.start_attack_symbol).count_nonzero() == 0
 
-        # past_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
-        #                        for feature in self.FEATURES['past']]
-        # past_tensor_indices += self.chord_tensor_idx
         past_tensor_indices = list(range(0, 5)) + list(range(6, 13))
-        past = self.mask_entry(
-            batch[:, :middle_tick, :],
-            past_tensor_indices,
-            dim=2
-        )
+        past = batch[:, :middle_tick, past_tensor_indices]
 
         # Remove improvised pitch and attack from present tick
-        # present_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
-        #                           for feature in self.FEATURES['present']]
-        # present_tensor_indices += self.chord_tensor_idx
         present_tensor_indices = [0] + list(range(3, 13))
-        present = self.mask_entry(
-            batch[:, middle_tick:middle_tick + 1, :],
-            present_tensor_indices,
-            dim=2
-        )
+        present = batch[:, middle_tick:middle_tick + 1, present_tensor_indices]
 
         # Reverse sequence for future ticks
         reversed_tensor = reverse_tensor(
@@ -310,16 +296,11 @@ class TimeStepFullModel(TimeStepChordModel):
             future_tensor_indices,
             dim=2
         )
+        future = batch[:, middle_tick:middle_tick + 1, future_tensor_indices]
 
         # Remove everything but improvised pitch and attack to get label
-        # label_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
-        #                         for feature in self.LABELS]
         label_tensor_indices = [1, 2]
-        label = self.mask_entry(
-            batch[:, middle_tick:middle_tick + 1:, :],
-            label_tensor_indices,
-            dim=2
-        )
+        label = batch[:, middle_tick:middle_tick + 1:, label_tensor_indices]
         label = label.view(batch_size, -1)
 
         assert present[:, :, 1].eq(self.start_pitch_symbol).count_nonzero() == 0 and \
@@ -354,8 +335,8 @@ class TimeStepFullModel(TimeStepChordModel):
         common_sliced_data = example[np.arange(start_idx, end_idx) % length]
 
         offsets = common_sliced_data[None, :, 0]
-        original_pitches = common_sliced_data[None, :, 1]
-        original_attacks = common_sliced_data[None, :, 2]
+        original_pitches = common_sliced_data[None, :, 3]
+        original_attacks = common_sliced_data[None, :, 4]
 
         metadata = common_sliced_data[:, metadata_start:metadata_end].transpose(0, 1)
 

@@ -14,18 +14,18 @@ from src.utils.ezchord import Chord
 from src.utils.constants import TICKS_PER_MEASURE, REST_VAL, PITCH_CLS
 
 logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 
 def compute_histogram_entropy(histogram):
     return scipy.stats.entropy(histogram) / np.log(2)
 
 
-def get_pitch_histogram(melody, pitches=range(128), verbose=False):
+def get_pitch_histogram(melody, pitches=range(128)):
     pitches = [x for x in melody['pitch'] if x in pitches]
 
-    if not len(melody):
-        if verbose:
-            logger.info('The sequence contains no notes.')
+    if len(pitches) == 0:
+        logger.debug('The sequence contains no notes.')
         return None
 
     n_pich_cls = len(PITCH_CLS)
@@ -122,7 +122,7 @@ def compute_piece_chord_progression_irregularity(chord_sequence, ngram=3):
     return len(unique_set) / num_ngrams
 
 
-valid_base_durations = [2, 3, 6, 12, 24, 48, 4, 8, 16]  # TODO 1 is not correct?
+valid_base_durations = [3, 6, 12, 24, 48, 1, 2, 4, 8, 16, 0]
 valid_durations = set({})
 for r1 in valid_base_durations:
     valid_durations.add(r1)
@@ -417,15 +417,19 @@ def calculate_OR(melody, l):
     return valid_count
 
 
-def calculate_corpus_sequences(dataset, l):
+def calculate_corpus_sequences(dataset, l, do_duration=False):
     corpus_sequences = {}
 
     for melody_tensor in dataset.tensor_dataset:
         for i in range(melody_tensor.shape[0] - l + 1):
-            pitch = tuple(melody_tensor[i:i + l, 3].tolist())
-            duration = tuple(melody_tensor[i:i + l, 4].tolist())
+            pitch = tuple(melody_tensor[i:i + l, 3].long().tolist())
 
-            seq = (pitch, duration)
+            if do_duration:
+                duration = tuple(melody_tensor[i:i + l, 4].long().tolist())
+                seq = (pitch, duration)
+            else:
+                seq = pitch
+
             corpus_sequences[seq] = True
 
     return corpus_sequences
@@ -436,16 +440,19 @@ def calculate_corpus_sequences(dataset, l):
 # Given a specified length l, RMF measures how frequently the model copies
 # note sequences of length l from the corpus.
 
-def calculate_RMF(melody, corpus_sequences, l):
+def calculate_RMF(melody, corpus_sequences, l, do_duration=False):
     match_sequences = []
     matches = 0
     total = 0
 
     for i in range(len(melody) - l + 1):
-        pitch = tuple(melody.iloc[i:i + l, 2].values)
-        duration = tuple(melody.iloc[i:i + l, 3].values)
+        pitch = tuple(melody.iloc[i:i + l, 2].astype(int).values)
 
-        sequence = (pitch, duration)
+        if do_duration:
+            duration = tuple(melody.iloc[i:i + l, 3].astype(int).values)
+            sequence = (pitch, duration)
+        else:
+            sequence = pitch
 
         try:
             _ = corpus_sequences[l][sequence]

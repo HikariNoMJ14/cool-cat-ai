@@ -209,7 +209,7 @@ class TimeStepMelody(Melody):
         ).long().clone()
 
         original_pitches = torch.from_numpy(
-            np.array([(self.encoded['original_pitch'] + transpose_interval).fillna(REST_ATTACK_SYMBOL)])
+            np.array([(self.encoded['original_pitch'] + transpose_interval).fillna(REST_PITCH_SYMBOL)])
         ).long().clone()
 
         original_attacks = torch.from_numpy(
@@ -256,7 +256,8 @@ class TimeStepMelody(Melody):
 
         p.time_signature_changes.append(ts)
 
-        max_measure = (self.encoded['offset'] // TICKS_PER_MEASURE).max()
+        min_measure = (self.encoded.index // TICKS_PER_MEASURE).min()
+        max_measure = (self.encoded.index // TICKS_PER_MEASURE).max()
 
         # Add melody
         melody = pm.Instrument(
@@ -298,7 +299,8 @@ class TimeStepMelody(Melody):
         # Add chords
         start = 0
         beat_n = 0
-        previous_chord_name = ''
+        previous_chord_name = ""
+        flat_chord_progression = flatten_chord_progression(self.song_structure)
 
         chords = pm.Instrument(
             program=pm.instrument_name_to_program(chord_instrument_name),
@@ -307,50 +309,58 @@ class TimeStepMelody(Melody):
 
         chord_multiplier = 60 / out_bpm
 
-        # TODO Generalize for melodies longer than one cycle
-        for section in self.song_structure['sections']:
-            for chord_name in self.song_structure['progression'][section]:
-                chord_notes = Chord(chord_name).getMIDI()
+        measure = min_measure
+        while np.floor(measure) <= max_measure:
 
-                # Use the tonic on the first beat, the fifth on the third beat
-                # and the full chord (minus the fifth) on beats 2 and 4
-                # TODO only works with 4/4
-                if beat_n == 0:
-                    note = pm.Note(
-                        velocity=64,
-                        pitch=int(chord_notes[0]),
-                        start=start,
-                        end=start + 0.25,
-                    )
-                    chords.notes.append(note)
-                elif beat_n == 2:
-                    note = pm.Note(
-                        velocity=64,
-                        pitch=int(chord_notes[3]) - OCTAVE_SEMITONES * 2,
-                        start=start,
-                        end=start + (chord_multiplier / 2),
-                    )
-                    chords.notes.append(note)
-                else:
-                    for extension, chord_note in enumerate(chord_notes[1:]):
-                        if extension != 2:  # don't add the fifth
-                            note = pm.Note(
-                                velocity=64,
-                                pitch=int(chord_note),
-                                start=start,
-                                end=start + (chord_multiplier / 2),
-                            )
-                            chords.notes.append(note)
+            chord_idx = int(4 * np.floor(measure) + beat_n) % len(flat_chord_progression)
+            chord_name = flat_chord_progression[chord_idx]
+            chord_notes = Chord(chord_name).getMIDI()
 
-                if beat_n == 0 or chord_name != previous_chord_name:
-                    # Add chord annotation
-                    chord_annotation = pm.Lyric(chord_name, start)
+            # Use the tonic on the first beat, the fifth on the third beat
+            # and the full chord (minus the fifth) on beats 2 and 4
+            # TODO only works with 4/4
+            if beat_n == 0:
+                note = pm.Note(
+                    velocity=64,
+                    pitch=int(chord_notes[0]),
+                    start=start,
+                    end=start + 0.25,
+                )
+                chords.notes.append(note)
 
-                    p.lyrics.append(chord_annotation)
-                    previous_chord_name = chord_name
+                # Add chord annotation
+                chord_annotation = pm.Lyric(chord_name, start)
 
-                start += chord_multiplier
-                beat_n = (beat_n + 1) % 4
+                p.lyrics.append(chord_annotation)
+            elif beat_n == 2:
+                note = pm.Note(
+                    velocity=64,
+                    pitch=int(chord_notes[3]) - OCTAVE_SEMITONES * 2,
+                    start=start,
+                    end=start + (chord_multiplier / 2),
+                )
+                chords.notes.append(note)
+            else:
+                for extension, chord_note in enumerate(chord_notes[1:]):
+                    if extension != 2:  # don't add the fifth
+                        note = pm.Note(
+                            velocity=64,
+                            pitch=int(chord_note),
+                            start=start,
+                            end=start + (chord_multiplier / 2),
+                        )
+                        chords.notes.append(note)
+
+            if beat_n == 0 or chord_name != previous_chord_name:
+                # Add chord annotation
+                chord_annotation = pm.Lyric(chord_name, start)
+
+                p.lyrics.append(chord_annotation)
+                previous_chord_name = chord_name
+
+            measure += 1 / 4
+            start += chord_multiplier
+            beat_n = (beat_n + 1) % 4
 
         p.instruments.append(chords)
 
@@ -366,8 +376,8 @@ class TimeStepMelody(Melody):
 
         drums_multiplier = 60 / out_bpm
 
-        measure = 0
-        while measure <= max_measure:
+        measure = min_measure
+        while np.floor(measure) <= max_measure:
             # Add on-beat ride cymbal
             note = pm.Note(
                 velocity=72,
