@@ -170,7 +170,7 @@ class Melody:
                 self.tempo = tempos[0]
             else:
                 self.tempo = tempos[-1]  # TODO double-check if this is sensible
-                # self.errors.append(f'multiple tempos: {tempos}')
+                # print(f'multiple tempos: {tempos}')
 
     @no_errors
     def save_time_signature(self):

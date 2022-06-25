@@ -2,26 +2,14 @@ mlflow:
   experiment_name: timestep - v2
   run_name: test plagiarism
 
-#  experiment_name: none
-#  run_name: default
-
 dataset:
   encoding_type: timestep
   polyphonic: False
   chord_encoding_type: extended
   chord_extension_count: 7
-  duration_correction: 0
   transpose_mode: all
   sequence_size: 193
 #  sequence_size: 41
-
-
-#Learning rate 5e−1
-#Weight decay 1e−6
-#Dropout 0
-#Number of epochs 500
-#Batch size 256
-#Sequence Length 100
 
 model:
   use_padding_idx: False

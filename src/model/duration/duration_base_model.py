@@ -214,10 +214,7 @@ class DurationBaseModel(BaseModel):
         present_nn_output = self.present_nn(present_nn_input)
 
         # Merge NN
-        merge_nn_input = torch.cat([
-            past_improvised_lstm_output,
-            present_nn_output
-        ], 1)
+        merge_nn_input = torch.cat([past_improvised_lstm_output, present_nn_output], 1)
         merge_nn_output = self.merge_nn(merge_nn_input)
 
         output_improvised_pitch = self.pitch_decoder(torch.sigmoid(merge_nn_output[:, :self.embedding_size]))

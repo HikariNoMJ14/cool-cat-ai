@@ -55,18 +55,68 @@ def calculate_metrics(df, corpus_sequences):
 
 def prepare_timestep_melody(filepath):
     df = pd.read_csv(filepath, index_col=0)
-
     df['measure'] = (df['ticks'] // 48).astype('int')
     df = df.rename({
         'improvised_pitch': 'pitch',
-        'improvised_duration': 'duration'
+        'improvised_attack': 'attack'
     }, axis=1)
-    df['offset'] = df['offset'].astype('int')
-    df['ticks'] = df['ticks'].astype('int')
-    # df['duration'] = df['duration'].astype('int')
-    df['pitch'] = df['pitch'].replace(np.nan, -1).astype('int')
 
-    return df
+    ts = []
+    prev_note = None
+    duration = 1
+    chord_name = np.nan
+    ticks = np.nan
+    offset = np.nan
+    measure = np.nan
+    pitch = np.nan
+    first_nan = False
+
+    for i, row in df.iterrows():
+        duration += 1
+
+        if np.isnan(row['pitch']):
+            if not first_nan:
+                if prev_note is not None:
+                    ts.append(prev_note)
+                    duration = 1
+
+                ticks = i
+                offset = row['offset']
+                measure = row['measure']
+                pitch = row['pitch']
+                chord_name = row['chord_name']
+
+            first_nan = True
+        else:
+            first_nan = False
+
+            if row['attack'] == 1:
+                if prev_note is not None:
+                    ts.append(prev_note)
+                    duration = 1
+
+                ticks = i
+                offset = row['offset']
+                measure = row['measure']
+                pitch = row['pitch']
+                chord_name = row['chord_name']
+
+        prev_note = {
+            'ticks': ticks,
+            'offset': offset,
+            'measure': measure,
+            'pitch': pitch,
+            'duration': duration,
+            'chord_name': chord_name
+        }
+
+    ts_df = pd.DataFrame.from_dict(ts)
+
+    ts_df['offset'] = ts_df['offset'].astype('int')
+    ts_df['ticks'] = ts_df['ticks'].astype('int')
+    ts_df['pitch'] = ts_df['pitch'].replace(np.nan, -1).astype('int')
+
+    return ts_df
 
 
 def evaluate_timestep_melody(filepath, corpus_sequences=None):
@@ -107,10 +157,10 @@ def evaluate_duration_melody(filepath, corpus_sequences=None):
 def evaluate_model(model, generator, logger, n_measures=8, unseen=False, n_samples=100):
     metrics = {}
 
-    corpus_sequences = None
-    # corpus_sequences = {}
-    # for l in SEQUENCE_LENGTHS:
-    #     corpus_sequences[l] = objective_metrics.calculate_corpus_sequences(model.dataset, l)
+    # corpus_sequences = None
+    corpus_sequences = {}
+    for l in SEQUENCE_LENGTHS:
+        corpus_sequences[l] = objective_metrics.calculate_corpus_sequences(model.dataset, l)
 
     original_filepaths = set([Melody(i, '1.2').song_name for i in get_filepaths('original')])
     seen_filepaths = set([Melody(i, '1.2').song_name for i in get_filepaths('improvised')])

@@ -465,7 +465,7 @@ def reverse_tensor(tensor, dim):
 
 
 def tempo_to_metadata(tempo):
-    metadata_mapping = pd.read_csv(os.path.join(src_path, 'data', 'finalised', 'metadata.csv'), index_col=0)
+    metadata_mapping = pd.read_csv(os.path.join(src_path, 'data', 'finalised', 'metadata_v2.csv'), index_col=0)
 
     tempo_idx = metadata_mapping[metadata_mapping['tempo'] == tempo]['tempo_idx'].unique()
 
@@ -476,8 +476,20 @@ def tempo_to_metadata(tempo):
 
 
 def random_metadata():
-    metadata_mapping = pd.read_csv(os.path.join(src_path, 'data', 'finalised', 'metadata.csv'), index_col=0)
+    metadata_mapping = pd.read_csv(os.path.join(src_path, 'data', 'finalised', 'metadata_v2.csv'), index_col=0)
 
-    random_idx = int(np.floor(np.random.random() * metadata_mapping.shape[0]))
+    # random_idx = int(np.floor(np.random.random() * metadata_mapping.shape[0]))
 
-    return tuple(metadata_mapping.loc[random_idx, ['tempo', 'tempo_idx']])
+    # return tuple(metadata_mapping.loc[random_idx, ['tempo', 'tempo_idx']])
+
+    mapping = {
+        0: 90,
+        1: 120,
+        2: 150
+    }
+
+    tempo = mapping[int(np.floor(np.random.random() * 3))]
+
+    tempo_idx = metadata_mapping[metadata_mapping['tempo'] == tempo]['tempo_idx'].unique()[0]
+
+    return tempo, tempo_idx

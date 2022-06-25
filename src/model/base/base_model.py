@@ -274,6 +274,7 @@ class BaseModel(nn.Module):
 
             features, label = self.prepare_examples(batch)
             prediction = self(features)
+
             current_loss, current_metrics = self.loss_function(prediction, label)
 
             optimizer.zero_grad()

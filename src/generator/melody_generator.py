@@ -34,4 +34,6 @@ class MelodyGenerator:
     def generate_melody(self, melody_name, metadata, n_measures):
         self.setup_context(melody_name, metadata)
 
+        self.generated_improvised_pitches = np.array([])
+
 

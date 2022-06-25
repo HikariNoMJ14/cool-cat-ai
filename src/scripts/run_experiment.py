@@ -43,7 +43,6 @@ if __name__ == "__main__":
     polyphonic = bool(dataset_config['polyphonic'])
     chord_encoding_type = dataset_config['chord_encoding_type']
     chord_extension_count = int(dataset_config['chord_extension_count'])
-    duration_correction = int(dataset_config['duration_correction'])
     transpose_mode = dataset_config['transpose_mode']
     sequence_size = int(dataset_config['sequence_size'])
 
@@ -133,7 +132,6 @@ if __name__ == "__main__":
     mlflow.log_param('polyphonic', polyphonic)
     mlflow.log_param('chord_encoding_type', chord_encoding_type)
     mlflow.log_param('chord_extension_count', chord_extension_count)
-    mlflow.log_param('duration_correction', duration_correction)
     mlflow.log_param('transpose_mode', transpose_mode)
     mlflow.log_param('sequence_size', sequence_size)
 
@@ -175,7 +173,6 @@ if __name__ == "__main__":
         polyphonic=polyphonic,
         chord_encoding_type=chord_encoding_type,
         chord_extension_count=chord_extension_count,
-        duration_correction=duration_correction,
         transpose_mode=transpose_mode,
         logger=logger
     )

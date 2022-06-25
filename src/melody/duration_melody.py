@@ -19,7 +19,7 @@ class DurationMelody(Melody):
     VERSION = '1.2'
 
     def __init__(self, filepath, polyphonic=False,
-                 chord_encoding_type='extended', chord_extension_count=7, duration_correction=0):
+                 chord_encoding_type='extended', chord_extension_count=7):
         super(DurationMelody, self).__init__(filepath, self.VERSION, chord_encoding_type, chord_extension_count)
 
         self.encoded = None
@@ -31,7 +31,6 @@ class DurationMelody(Melody):
             'duration',
             'poly' if self.polyphonic else 'mono',
         )
-        self.duration_correction = duration_correction
 
     @staticmethod
     def multiple_pitches_to_string(pitches):
@@ -92,7 +91,7 @@ class DurationMelody(Melody):
         for i, row in dataset.iterrows():
             diff = row['ticks'] - (duration + ticks)
 
-            if diff > self.duration_correction:
+            if diff > 0:
                 rows.append({
                     'ticks': (ticks + duration),
                     'offset': (ticks + duration) % ftpm,
@@ -104,11 +103,6 @@ class DurationMelody(Melody):
 
             ticks = row['ticks']
             duration = row['duration']
-
-            # if i + 1 < dataset.shape[0]:
-            #     next_diff = dataset.iloc[i + 1]['ticks'] - (row['duration'] + row['ticks'])
-            #     if next_diff <= self.duration_correction:
-            #         duration = duration + next_diff
 
             rows.append({
                 'ticks': row['ticks'],

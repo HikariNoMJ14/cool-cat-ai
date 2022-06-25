@@ -22,29 +22,25 @@ logger.addHandler(consoleHandler)
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..')
 
-seed = 36
+seed = 666
 
 if __name__ == "__main__":
     model_path = os.path.join(
+        src_path, 'mlruns',
+
         # time-step base
-        # src_path, 'mlruns',
         # '11/029e40e890b847229c6419b7a40d8f89', 'artifacts',
         # '22_06_21_01_09_26_transpose_all_chord_extended_7_batchsize_128_seed_1234567890.pt'
 
         # time-step full
-        src_path, 'mlruns',
-        # '10/f67d6b65ec6846b8971352b7367ab6d4', 'artifacts',
-        # '22_06_20_12_03_43_transpose_all_chord_extended_7_batchsize_128_seed_1234567890_best_val.pt'
-        '10/ff85d1433722430caf4acad32e48e80c/artifacts',
-        '22_06_22_23_33_22_transpose_all_chord_extended_7_batchsize_128_seed_1234567890_best_val.pt'
+        '10/f7a9e47e5b5b4e6f8177ddc52531b3cb/artifacts',
+        '22_06_24_20_26_34_transpose_all_chord_extended_7_batchsize_128_seed_9876543_best_val.pt'
 
         # duration base
-        # src_path, 'mlruns',
         # '12/08a17afd032945acb22a30eb5aea8ab9', 'artifacts',
         # '22_06_21_21_48_06_transpose_all_chord_extended_7_batchsize_128_seed_1234567890_best_val.pt'
 
         # duration full
-        # src_path, 'mlruns',
         # '5/10890460b0ea43fea7e57354d0835405', 'artifacts',
         # '22_06_07_00_15_51_transpose_all_chord_extended_7_batchsize_64_seed_1234567890_best_val.pt'
     )
@@ -84,5 +80,5 @@ if __name__ == "__main__":
         logger
     )
 
-    generator.generate_melody('They Can\'t Take That Away From Me', metadata, 32)
+    generator.generate_melody('Autumn Leaves', metadata, 32)
     generator.save(tempo=tempo)

@@ -29,6 +29,8 @@ class TimeStepBaseGenerator(MelodyGenerator):
     def generate_melody(self, melody_name, metadata, n_measures):
         super().generate_melody(melody_name, metadata, n_measures)
 
+        self.generated_improvised_attacks = np.array([])
+
         with torch.no_grad():
             for measure in range(n_measures):
                 for offset in range(TICKS_PER_MEASURE):
@@ -52,7 +54,7 @@ class TimeStepBaseGenerator(MelodyGenerator):
 
         chord_progression = chord_progressions[melody_name]
 
-        self.melody = TimeStepMelody(None, polyphonic=False, duration_correction=0)
+        self.melody = TimeStepMelody(None, polyphonic=False)
         self.melody.song_name = melody_name
         self.melody.set_song_structure(chord_progression)
         self.melody.encode(None, original_filepath)

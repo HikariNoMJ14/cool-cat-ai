@@ -27,7 +27,6 @@ class MelodyDataset:
                  polyphonic,
                  chord_encoding_type,
                  chord_extension_count,
-                 duration_correction,
                  transpose_mode,
                  logger):
         super(MelodyDataset, self).__init__()
@@ -42,7 +41,6 @@ class MelodyDataset:
         self.transpose_mode = transpose_mode
         self.chord_encoding_type = chord_encoding_type
         self.chord_extension_count = chord_extension_count
-        self.duration_correction = duration_correction
 
         self.melody_info = {}
         self.chord_progressions = get_chord_progressions(src_path)
@@ -180,8 +178,7 @@ class MelodyDataset:
                 filepath=improvised_filepath,
                 polyphonic=False,
                 chord_encoding_type=self.chord_encoding_type,
-                chord_extension_count=self.chord_extension_count,
-                duration_correction=self.duration_correction
+                chord_extension_count=self.chord_extension_count
             )
             melody.set_song_structure(self.chord_progressions[melody.song_name])
 

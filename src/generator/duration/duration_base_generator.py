@@ -31,6 +31,10 @@ class DurationBaseGenerator(MelodyGenerator):
     def generate_melody(self, melody_name, metadata, n_measures):
         super().generate_melody(melody_name, metadata, n_measures)
 
+        self.generated_improvised_ticks = np.array([])
+        self.generated_improvised_offsets = np.array([])
+        self.generated_improvised_durations = np.array([])
+
         tick = 0
 
         with torch.no_grad():
@@ -60,7 +64,7 @@ class DurationBaseGenerator(MelodyGenerator):
 
         chord_progression = chord_progressions[melody_name]
 
-        self.melody = DurationMelody(None, polyphonic=False, duration_correction=0)
+        self.melody = DurationMelody(None, polyphonic=False)
         self.melody.song_name = melody_name
         self.melody.set_song_structure(chord_progression)
 

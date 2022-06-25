@@ -37,7 +37,7 @@ class DurationFullGenerator(DurationChordGenerator):
 
         chord_progression = chord_progressions[melody_name]
 
-        self.melody = DurationMelody(None, polyphonic=False, duration_correction=0)
+        self.melody = DurationMelody(None, polyphonic=False)
         self.melody.song_name = melody_name
         self.melody.set_song_structure(chord_progression)
         self.melody.encode(None, original_filepath)
@@ -135,7 +135,6 @@ class DurationFullGenerator(DurationChordGenerator):
         padded_original_chord_pitches.append(center_original_chord_pitches)
 
         if end_idx > length:
-            self.logger.info('future!')
             last_offset = int(center_original_offsets[:, -1])
             right_padded_offsets = torch.from_numpy(
                 np.array([np.arange(last_offset + 1, last_offset + end_idx - length + 1, 1) % TICKS_PER_MEASURE])
@@ -219,6 +218,8 @@ class DurationFullGenerator(DurationChordGenerator):
             new_duration = max_idx_duration.unsqueeze(0)
 
         new_duration = self.model.convert_ids_to_durations(new_duration)
+
+        self.logger.debug([new_pitch.item(), new_duration.item()])
 
         assert 0 <= new_pitch <= 128
         assert new_duration > 0
