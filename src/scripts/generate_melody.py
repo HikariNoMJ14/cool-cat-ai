@@ -33,8 +33,8 @@ if __name__ == "__main__":
         # '22_06_21_01_09_26_transpose_all_chord_extended_7_batchsize_128_seed_1234567890.pt'
 
         # time-step full
-        '10/f7a9e47e5b5b4e6f8177ddc52531b3cb/artifacts',
-        '22_06_24_20_26_34_transpose_all_chord_extended_7_batchsize_128_seed_9876543_best_val.pt'
+        '10/d7440c51ae474828b64d3e11c741c8e1/artifacts',
+        '22_06_25_23_32_27_transpose_all_chord_extended_7_batchsize_128_seed_9876543_best_val.pt'
 
         # duration base
         # '12/08a17afd032945acb22a30eb5aea8ab9', 'artifacts',

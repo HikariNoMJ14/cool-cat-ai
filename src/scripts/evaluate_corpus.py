@@ -66,3 +66,5 @@ if __name__ == "__main__":
             logger.info(f'{metric} - {metrics_df[metric].mean():5.3f} - {metrics_df[metric].std():5.3f}')
         else:
             logger.error(f'{metric} has not been calculated')
+
+    metrics_df.to_csv(os.path.join(folder, '..', 'metrics.csv'))

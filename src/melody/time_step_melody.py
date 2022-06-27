@@ -19,7 +19,7 @@ class TimeStepMelody(Melody):
     VERSION = '1.2'
 
     def __init__(self, filepath, polyphonic=False,
-                 chord_encoding_type='extended', chord_extension_count=7, duration_correction=0):
+                 chord_encoding_type='extended', chord_extension_count=7):
         super(TimeStepMelody, self).__init__(filepath, self.VERSION, chord_encoding_type, chord_extension_count)
 
         self.encoded = None
@@ -31,7 +31,6 @@ class TimeStepMelody(Melody):
             'timestep',
             'poly' if self.polyphonic else 'mono',
         )
-        self.duration_correction = duration_correction
 
     @staticmethod
     def multiple_pitches_to_string(pitches):
@@ -72,16 +71,16 @@ class TimeStepMelody(Melody):
 
         n_ticks = self.FINAL_TICKS_PER_BEAT * num_chord_progression_beats
 
+        original_rest_attack = False
+        improvised_rest_attack = False
         rows = []
         for i in range(n_ticks):
             offset = i % (self.FINAL_TICKS_PER_BEAT * self.chord_progression_time_signature[0])
 
             original_pitch = np.nan
-            original_attack = np.nan
+            original_attack = 1
 
-            original_pitches = original[
-                (original['ticks'] <= i) & (i < original['end_ticks'])
-            ]
+            original_pitches = original[(original['ticks'] <= i) & (i < original['end_ticks'])]
 
             if len(original_pitches) > 0:
                 original_pitch = original_pitches['pitch'].values[0]
@@ -90,25 +89,27 @@ class TimeStepMelody(Melody):
                     print(original_pitches)
                     raise Exception('Error!!! not mono pitch on original')
 
-            if not np.isnan(original_pitch):
-                original_attacks = original[original['ticks'] == i]
+            original_attacks = original[original['ticks'] == i]
 
-                if len(original_attacks) > 0:
+            if len(original_attacks) > 1:
+                raise Exception('Error!!! not mono attack on original')
+
+            if len(original_attacks) == 0:
+                original_attack = 0
+
+            if np.isnan(original_pitch):
+                if not original_rest_attack:
                     original_attack = 1
-
-                    if len(original_attacks) > 1:
-                        raise Exception('Error!!! not mono attack on original')
-                else:
-                    original_attack = 0
+                    original_rest_attack = True
+            else:
+                original_rest_attack = False
 
             improvised_pitch = np.nan
-            improvised_attack = np.nan
+            improvised_attack = 1
 
             if improvised_filepath is not None:
 
-                improvised_pitches = improvised[
-                    (improvised['ticks'] <= i) & (i < improvised['end_ticks'])
-                    ]
+                improvised_pitches = improvised[(improvised['ticks'] <= i) & (i < improvised['end_ticks'])]
 
                 if len(improvised_pitches) > 0:
                     improvised_pitch = improvised_pitches['pitch'].values[0]
@@ -116,16 +117,20 @@ class TimeStepMelody(Melody):
                     if len(improvised_pitches) > 1:
                         raise Exception('Error!!! not mono pitch on improvised')
 
-                if not np.isnan(improvised_pitch):
-                    improvised_attacks = improvised[improvised['ticks'] == i]
+                improvised_attacks = improvised[improvised['ticks'] == i]
 
-                    if len(improvised_attacks) > 0:
+                if len(improvised_attacks) > 1:
+                    raise Exception('Error!!! not mono attack on improvised')
+
+                if len(improvised_attacks) == 0:
+                    improvised_attack = 0
+
+                if np.isnan(improvised_pitch):
+                    if not improvised_rest_attack:
                         improvised_attack = 1
-
-                        if len(improvised_attacks) > 1:
-                            raise Exception('Error!!! not mono attack on improvised')
-                    else:
-                        improvised_attack = 0
+                        improvised_rest_attack = True
+                else:
+                    improvised_rest_attack = False
 
             chord_name = flat_chord_progression[(i // self.FINAL_TICKS_PER_BEAT)]
 
@@ -273,26 +278,27 @@ class TimeStepMelody(Melody):
         attack_df.reset_index(inplace=True)
 
         for i, row in attack_df.iterrows():
-            start = row.ticks * melody_multiplier
+            if not np.isnan(row['improvised_pitch']):
+                start = row.ticks * melody_multiplier
 
-            duration = 0
+                duration = 0
 
-            next_idx = min(len(attack_df) - 1, i + 1)
-            next_att = attack_df.iloc[next_idx]['ticks']
+                next_idx = min(len(attack_df) - 1, i + 1)
+                next_att = attack_df.iloc[next_idx]['ticks']
 
-            for j, row2 in self.encoded.iloc[row.ticks:next_att].iterrows():
-                if row2['improvised_pitch'] == row['improvised_pitch']:
-                    duration += 1
+                for j, row2 in self.encoded.iloc[row.ticks:next_att].iterrows():
+                    if row2['improvised_pitch'] == row['improvised_pitch']:
+                        duration += 1
 
-            end = start + duration * melody_multiplier
+                end = start + duration * melody_multiplier
 
-            note = pm.Note(
-                velocity=127,
-                pitch=int(row["improvised_pitch"]),
-                start=start,
-                end=end,
-            )
-            melody.notes.append(note)
+                note = pm.Note(
+                    velocity=127,
+                    pitch=int(row["improvised_pitch"]),
+                    start=start,
+                    end=end,
+                )
+                melody.notes.append(note)
 
         p.instruments.append(melody)
 
@@ -311,7 +317,6 @@ class TimeStepMelody(Melody):
 
         measure = min_measure
         while np.floor(measure) <= max_measure:
-
             chord_idx = int(4 * np.floor(measure) + beat_n) % len(flat_chord_progression)
             chord_name = flat_chord_progression[chord_idx]
             chord_notes = Chord(chord_name).getMIDI()

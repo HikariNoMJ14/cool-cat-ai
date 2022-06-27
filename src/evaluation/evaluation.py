@@ -4,16 +4,17 @@ import pandas as pd
 
 from src.melody import Melody
 from src.utils import get_filepaths, random_metadata
+from src.utils.constants import TICKS_PER_MEASURE
 from src.evaluation import objective_metrics
 
 SEQUENCE_LENGTHS = [3, 4, 5, 6]
-EVALUATION_METRICS = ['PCHE1', 'PCHE4', 'PVF4', 'TS12', 'CPR2', 'DPR24', 'GPS', 'RVF4', 'QRF', 'HC-m']
+EVALUATION_METRICS = ['PCHE1', 'PCHE4', 'PVF4', 'TS12', 'CPR2', 'DPR24', 'GPS', 'RVF4', 'QRF', 'HC-m', 'SR']
 
 for l in SEQUENCE_LENGTHS:
     EVALUATION_METRICS.append(f'RMF{l}')
 
 
-def calculate_metrics(df, corpus_sequences):
+def calculate_metrics(df, corpus_sequences, n_measures):
     # PCHE
     pe1 = objective_metrics.compute_piece_pitch_entropy(df, 1)
     pe4 = objective_metrics.compute_piece_pitch_entropy(df, 4)
@@ -33,11 +34,13 @@ def calculate_metrics(df, corpus_sequences):
     qr = objective_metrics.calculate_QD(df)
     # HC
     hc = objective_metrics.calculate_HC(df[df['pitch'] >= 0])
+    # SR
+    sr = objective_metrics.calculate_silence_ratio(df, n_measures)
 
     results = {
         'PCHE1': pe1, 'PCHE4': pe4, 'PVF4': pvf4, 'TS12': ts12,
         'CPR2': cpr2, 'DPR24': dpr24, 'GPS': gs, 'RVF4': rv4,
-        'QRF': qr, 'HC': hc
+        'QRF': qr, 'HC': hc, 'SR': sr
     }
 
     # RMF
@@ -55,7 +58,7 @@ def calculate_metrics(df, corpus_sequences):
 
 def prepare_timestep_melody(filepath):
     df = pd.read_csv(filepath, index_col=0)
-    df['measure'] = (df['ticks'] // 48).astype('int')
+    df['measure'] = (df['ticks'] // TICKS_PER_MEASURE).astype('int')
     df = df.rename({
         'improvised_pitch': 'pitch',
         'improvised_attack': 'attack'
@@ -63,7 +66,7 @@ def prepare_timestep_melody(filepath):
 
     ts = []
     prev_note = None
-    duration = 1
+    duration = 0
     chord_name = np.nan
     ticks = np.nan
     offset = np.nan
@@ -104,9 +107,9 @@ def prepare_timestep_melody(filepath):
         prev_note = {
             'ticks': ticks,
             'offset': offset,
-            'measure': measure,
             'pitch': pitch,
             'duration': duration,
+            'measure': measure,
             'chord_name': chord_name
         }
 
@@ -115,14 +118,15 @@ def prepare_timestep_melody(filepath):
     ts_df['offset'] = ts_df['offset'].astype('int')
     ts_df['ticks'] = ts_df['ticks'].astype('int')
     ts_df['pitch'] = ts_df['pitch'].replace(np.nan, -1).astype('int')
+    ts_df['measure'] = ts_df['measure'].astype('int')
 
     return ts_df
 
 
-def evaluate_timestep_melody(filepath, corpus_sequences=None):
+def evaluate_timestep_melody(filepath, corpus_sequences=None, n_measures=8):
     df = prepare_timestep_melody(filepath)
 
-    results = calculate_metrics(df, corpus_sequences)
+    results = calculate_metrics(df, corpus_sequences, n_measures)
 
     return results
 
@@ -130,7 +134,7 @@ def evaluate_timestep_melody(filepath, corpus_sequences=None):
 def prepare_duration_melody(filepath):
     df = pd.read_csv(filepath, index_col=0)
 
-    df['measure'] = (df['ticks'] // 48).astype('int')
+    df['measure'] = (df['ticks'] // TICKS_PER_MEASURE).astype('int')
     df = df.rename({
         'improvised_pitch': 'pitch',
         'improvised_duration': 'duration'
@@ -143,13 +147,16 @@ def prepare_duration_melody(filepath):
     return df
 
 
-def evaluate_duration_melody(filepath, corpus_sequences=None):
+def evaluate_duration_melody(filepath, corpus_sequences=None, n_measures=None):
     df = prepare_duration_melody(filepath)
 
     if 'type' in df.columns:
         df = df[df['type'] == 'improvised']
 
-    results = calculate_metrics(df, corpus_sequences)
+    if n_measures is None:
+        n_measures = df['measure'].max()
+
+    results = calculate_metrics(df, corpus_sequences, n_measures)
 
     return results
 
@@ -185,9 +192,9 @@ def evaluate_model(model, generator, logger, n_measures=8, unseen=False, n_sampl
     logger.info('Seen melodies')
     for generated_filepath in seen_gen_filepaths:
         if model.ENCODING_TYPE == 'timestep':
-            metrics[generated_filepath] = evaluate_timestep_melody(generated_filepath, corpus_sequences)
+            metrics[generated_filepath] = evaluate_timestep_melody(generated_filepath, corpus_sequences, n_measures)
         elif model.ENCODING_TYPE == 'duration':
-            metrics[generated_filepath] = evaluate_duration_melody(generated_filepath, corpus_sequences)
+            metrics[generated_filepath] = evaluate_duration_melody(generated_filepath, corpus_sequences, n_measures)
 
     metrics_df = pd.DataFrame().from_dict(metrics).T
     metrics_df['HC-m'] = metrics_df['HC'].apply(np.mean)

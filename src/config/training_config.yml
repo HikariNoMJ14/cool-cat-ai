@@ -1,28 +1,28 @@
 mlflow:
-  experiment_name: timestep - v2
-  run_name: test plagiarism
+  experiment_name: duration - v2
+  run_name: final model
 
 dataset:
-  encoding_type: timestep
+  encoding_type: duration
   polyphonic: False
   chord_encoding_type: extended
   chord_extension_count: 7
   transpose_mode: all
-  sequence_size: 193
-#  sequence_size: 41
+#  sequence_size: 193
+  sequence_size: 41
 
 model:
   use_padding_idx: False
   start_pitch_symbol: 129
   end_pitch_symbol: 129
-  start_attack_symbol: 3
-  end_attack_symbol: 3
+  start_attack_symbol: 2
+  end_attack_symbol: 2
   start_duration_symbol: 0
   end_duration_symbol: 0
 
   offset_size: 48
   pitch_size: 130
-  attack_size: 4
+  attack_size: 3
   metadata_size: 120
 
   embedding_size: 256
@@ -38,10 +38,10 @@ model:
   normalize: False
   gradient_clipping: 0.25
 
-  pitch_loss_weight: 0.7
-  attack_loss_weight: 0.3
+#  pitch_loss_weight: 0.8
+  attack_loss_weight: 0.2
 
-#  pitch_loss_weight: 0.6
+  pitch_loss_weight: 0.6
   duration_loss_weight: 0.4
 
 training:

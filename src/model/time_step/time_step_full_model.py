@@ -68,7 +68,7 @@ class TimeStepFullModel(TimeStepChordModel):
         self.attack_loss_weight = kwargs['attack_loss_weight']
 
         self.attack_loss_function = nn.CrossEntropyLoss(
-            weight=torch.Tensor([.1, .8, .05, .05])  # Focus on learning the occurrences of attack = 1
+            weight=torch.Tensor([.2, .6, .2])  # Focus on learning the occurrences of attack = 1
         )
 
         if kwargs['use_padding_idx'] and self.start_attack_symbol != self.end_attack_symbol:
@@ -282,21 +282,12 @@ class TimeStepFullModel(TimeStepChordModel):
         present_tensor_indices = [0] + list(range(3, 13))
         present = batch[:, middle_tick:middle_tick + 1, present_tensor_indices]
 
-        # Reverse sequence for future ticks
-        reversed_tensor = reverse_tensor(
-            batch[:, middle_tick + 1:, :], dim=1
-        )
         # Remove improvised pitch and attack from future ticks
-        # future_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
-        #                          for feature in self.FEATURES['future']]
-        # future_tensor_indices += self.chord_tensor_idx
         future_tensor_indices = [0] + [3, 4] + list(range(6, 13))
-        future = self.mask_entry(
-            reversed_tensor,
-            future_tensor_indices,
-            dim=2
-        )
-        future = batch[:, middle_tick:middle_tick + 1, future_tensor_indices]
+        future = batch[:, middle_tick + 1:, future_tensor_indices]
+
+        # Reverse sequence for future ticks
+        future = reverse_tensor(future, dim=1)
 
         # Remove everything but improvised pitch and attack to get label
         label_tensor_indices = [1, 2]

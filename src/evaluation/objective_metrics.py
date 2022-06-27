@@ -191,6 +191,9 @@ def calculate_QD(melody):
             valid_count += 1
         total_count += 1
 
+    if total_count == 0:
+        return 0
+
     return valid_count / total_count
 
 # https://github.com/Impro-Visor/sequence_gan
@@ -227,6 +230,9 @@ def calculate_CPR(melody, length):
         else:
             repetition_count += 1
         index += 1
+
+    if total == 0:
+        return 0
 
     return n_consecutive / total
 
@@ -276,6 +282,9 @@ def calculate_DPR(melody, duration):
             repetition_count += 1
         index += 1
 
+    if total == 0:
+        return 0
+
     return n_consecutive / total
 
 
@@ -300,6 +309,9 @@ def calculate_TS(melody, distance):
             count += 1
         total += 1
         base_pitch = pitches[i]
+
+    if total == 0:
+        return 0
 
     return count / total
 
@@ -346,6 +358,9 @@ def calculate_PVF(melody, window_size):
                 diff_pitches.add(pitch)
             pitch_variations += (float(len(diff_pitches)) / len(sequence))
 
+    if n_windows == 0:
+        return 0
+
     return pitch_variations / n_windows
 
 
@@ -389,6 +404,9 @@ def calculate_RVF(melody, window_size):
             for duration in sequence:
                 diff_durations.add(duration)
             rhythm_variations += (float(len(diff_durations)) / len(sequence))
+
+    if n_windows == 0:
+        return 0
 
     return rhythm_variations / n_windows
 
@@ -463,6 +481,9 @@ def calculate_RMF(melody, corpus_sequences, l, do_duration=False):
             pass
 
         total += 1
+
+    if total == 0:
+        return 0
 
     return matches / total
 
@@ -612,37 +633,8 @@ def calculate_HC(melody):
     return harmonic_consistency
 
 
-def calculate_silence_ratio(melody_data):
-    n_measures = melody_data['measure'].unique()[-1]
-    c = np.zeros(n_measures)
-    previous = None
-
-    for measure in range(n_measures):
-        current = melody_data[melody_data['measure'] == measure]
-
-        if len(current) > 0:
-            c[measure] = 1
-
-        if previous is not None:
-            end_offset = (previous['offset'] + previous['duration']) / 48
-            long_notes = end_offset[end_offset >= 1]
-
-            if len(long_notes) > 0:
-                c[measure] = 1
-                longer_notes = end_offset[end_offset >= 2]
-
-                if len(longer_notes) > 0:
-                    if len(c) > measure + 1:
-                        c[measure + 1] = 1
-                    longest_notes = end_offset[end_offset >= 2]
-
-                    if len(longest_notes) > 0:
-                        if len(c) > measure + 2:
-                            c[measure + 2] = 1
-
-        previous = current
-
-    return 1 - c.mean()
+def calculate_silence_ratio(melody_data, n_measures):
+    return 1 - (melody_data[melody_data['pitch'] > -1]['duration'].sum() / (n_measures * TICKS_PER_MEASURE))
 
 
 def get_sequences_onefile(allpath, MAX_SEQ_DUR_LENGTH):
