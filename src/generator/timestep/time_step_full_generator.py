@@ -7,7 +7,7 @@ from torch.functional import F
 from src.generator import TimeStepChordGenerator
 from src.melody import TimeStepMelody
 from src.utils import get_chord_progressions, get_original_filepath, reverse_tensor
-from src.utils.constants import REST_PITCH_SYMBOL, REST_ATTACK_SYMBOL
+from src.utils.constants import REST_PITCH_SYMBOL, REST_ATTACK_SYMBOL, OCTAVE_SEMITONES, MIDDLE_C
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.join(dir_path, '..', '..', '..')
@@ -35,7 +35,7 @@ class TimeStepFullGenerator(TimeStepChordGenerator):
 
         chord_progression = chord_progressions[melody_name]
 
-        self.melody = TimeStepMelody(None, polyphonic=False, duration_correction=0)
+        self.melody = TimeStepMelody(None, polyphonic=False)
         self.melody.song_name = melody_name
         self.melody.set_song_structure(chord_progression)
         self.melody.encode(None, original_filepath)
@@ -148,6 +148,13 @@ class TimeStepFullGenerator(TimeStepChordGenerator):
         return past, present, future
 
     def generate_note(self, tick):
+        if tick == 0:
+            seed = np.random.random() * OCTAVE_SEMITONES + MIDDLE_C
+            new_pitch = torch.Tensor([seed]).long()
+            new_attack = torch.Tensor([1]).long()
+
+            return new_pitch, new_attack
+
         past, present, future = self.get_context(tick)
 
         output_pitch, output_attack = self.model((past, present, future))
@@ -170,8 +177,9 @@ class TimeStepFullGenerator(TimeStepChordGenerator):
             _, max_idx_attack = torch.max(attack_probs, 0)
             new_attack = max_idx_attack.unsqueeze(0)
 
+        self.logger.debug([new_pitch.item(), new_attack.item()])
+
         assert 0 <= new_pitch <= 128
         assert 0 <= new_attack <= 2
-        assert new_pitch == 128 or new_attack != 2
 
         return new_pitch, new_attack
