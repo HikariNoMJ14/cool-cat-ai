@@ -67,7 +67,7 @@ class DurationChordGenerator(DurationBaseGenerator):
                                     (TICKS_PER_MEASURE / self.melody.chord_progression_time_signature[0]))
                                 ) % len(self.melody.flat_chord_progression)
                                 ]
-                        ])
+                        ], dtype=float)
                     for tick in self.generated_improvised_ticks[slice_start:slice_end]
                 ])
             ).long().clone().transpose(0, 1).cuda()
@@ -126,7 +126,7 @@ class DurationChordGenerator(DurationBaseGenerator):
                     np.array(
                         self.chord_mapping[
                             self.melody.flat_chord_progression[0]
-                        ])
+                        ], dtype=float)
                 ])
             ).long().clone().transpose(0, 1).cuda()
 

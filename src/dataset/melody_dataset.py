@@ -125,7 +125,6 @@ class MelodyDataset:
         )
 
     def get_metadata(self, melody):
-
         metadata = self.metadata[
             (self.metadata['song_name'] == melody.song_name) &
             (self.metadata['source'] == melody.source) &
@@ -164,6 +163,8 @@ class MelodyDataset:
             load_filepath = os.path.join(self.out_folder, f'{datetime}_{self.name}.pt')
             if not os.path.exists(load_filepath):
                 raise FileNotFoundError(f'File {load_filepath} doesn\'t exist')
+
+        self.logger.debug(load_filepath)
 
         with open(load_filepath, 'rb') as f:
             self.tensor_dataset = torch.load(f)

@@ -493,14 +493,15 @@ class Melody:
         return encoded_chord_pitches
 
     def transpose_chord(self, chord_name, transpose_interval):
-        chord_pitches = self.chord_mapping[chord_name]
+        chord_pitches = list(np.array(self.chord_mapping[chord_name], dtype=float))
 
         if self.chord_encoding_type == 'compressed':
-            chord_pitches = chord_pitches[-transpose_interval:] + chord_pitches[:-transpose_interval]
+            transposed_pitches = chord_pitches[-transpose_interval:] + chord_pitches[:-transpose_interval]
+        else:
+            transposed_pitches = [chord_pitch + transpose_interval for chord_pitch in chord_pitches
+                                  if not np.isnan(chord_pitch)]
 
-        return [chord_pitch + transpose_interval
-                if chord_pitch is not None else np.nan
-                for chord_pitch in chord_pitches]
+        return transposed_pitches
 
     def save_split_melody(self, repetition, quantized, chords=True):
         split_melody_df = self.split_note_info[repetition-1]

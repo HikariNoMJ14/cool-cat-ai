@@ -212,7 +212,7 @@ if __name__ == "__main__":
         duration_loss_weight=duration_loss_weight
     )
 
-    optimizer = torch.optim.SGD(  # TODO try Adam
+    optimizer = torch.optim.SGD(
         model.parameters(),
         lr=learning_rate,
         momentum=momentum,

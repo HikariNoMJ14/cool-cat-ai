@@ -13,10 +13,10 @@ logger.addHandler(consoleHandler)
 
 if __name__ == "__main__":
     d = MelodyDataset(
-        encoding_type='timestep',
+        encoding_type='duration',
         polyphonic=False,
-        chord_encoding_type='extended',
-        chord_extension_count=7,
+        chord_encoding_type='compressed',
+        chord_extension_count=12,
         transpose_mode='all',
         logger=logger
     )

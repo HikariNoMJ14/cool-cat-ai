@@ -28,8 +28,11 @@ class DurationBaseGenerator(MelodyGenerator):
         self.generated_improvised_offsets = np.array([])
         self.generated_improvised_durations = np.array([])
 
-    def generate_melody(self, melody_name, metadata, n_measures):
+    def generate_melody(self, melody_name, metadata, n_measures=None):
         super().generate_melody(melody_name, metadata, n_measures)
+
+        if n_measures is None:
+            n_measures = len(self.melody.flat_chord_progression)
 
         self.generated_improvised_ticks = np.array([])
         self.generated_improvised_offsets = np.array([])

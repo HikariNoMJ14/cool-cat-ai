@@ -37,7 +37,12 @@ class DurationFullGenerator(DurationChordGenerator):
 
         chord_progression = chord_progressions[melody_name]
 
-        self.melody = DurationMelody(None, polyphonic=False)
+        self.melody = DurationMelody(
+            None,
+            chord_encoding_type=self.model.dataset.chord_encoding_type,
+            chord_extension_count=self.model.dataset.chord_extension_count,
+            polyphonic=False
+        )
         self.melody.song_name = melody_name
         self.melody.set_song_structure(chord_progression)
         self.melody.encode(None, original_filepath)
@@ -64,7 +69,7 @@ class DurationFullGenerator(DurationChordGenerator):
         chord_pitches = torch.from_numpy(
             np.stack(
                 original_notes['chord_name'].apply(
-                    lambda x: np.array(self.chord_mapping[x]) + transpose_interval
+                    lambda x: self.melody.transpose_chord(x, transpose_interval)
                 )
             )
         ).long().clone().transpose(0, 1)

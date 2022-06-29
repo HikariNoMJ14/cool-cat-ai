@@ -198,7 +198,7 @@ class DurationChordModel(DurationBaseModel, ChordModel):
         past_improvised_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
                                           for feature in self.FEATURES['past_improvised']]
         past_improvised_tensor_indices += self.chord_tensor_idx
-        past_improvised_tensor_indices = [0, 1, 2] + list(range(4, 11))  # TODO fix!!!
+        past_improvised_tensor_indices = [0, 1, 2] + list(range(4, 4 + self.chord_extension_count))  # TODO fix!!!
         past_improvised = self.mask_entry(
             batch[:, :middle_tick, :],
             past_improvised_tensor_indices,
@@ -209,7 +209,7 @@ class DurationChordModel(DurationBaseModel, ChordModel):
         present_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
                                   for feature in self.FEATURES['present']]
         present_tensor_indices += self.chord_tensor_idx
-        present_tensor_indices = [0] + list(range(3, 11))  # TODO fix!!!
+        present_tensor_indices = [0] + [3] + list(range(4, 4 + self.chord_extension_count))  # TODO fix!!!
         present = self.mask_entry(
             batch[:, middle_tick:middle_tick + 1, :],
             present_tensor_indices,

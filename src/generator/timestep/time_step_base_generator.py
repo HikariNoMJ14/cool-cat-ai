@@ -29,6 +29,9 @@ class TimeStepBaseGenerator(MelodyGenerator):
     def generate_melody(self, melody_name, metadata, n_measures):
         super().generate_melody(melody_name, metadata, n_measures)
 
+        if n_measures is None:
+            n_measures = len(self.melody.flat_chord_progression)
+
         self.generated_improvised_attacks = np.array([])
 
         with torch.no_grad():

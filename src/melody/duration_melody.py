@@ -190,8 +190,8 @@ class DurationMelody(Melody):
         improvised_chord_pitches = torch.from_numpy(
             np.stack(
                 improvised_encoded['chord_name'].apply(
-                    lambda x: self.transpose_chord(x, transpose_interval)
-                ).fillna(REST_PITCH_SYMBOL)
+                    lambda x: pd.Series(self.transpose_chord(x, transpose_interval)).fillna(REST_PITCH_SYMBOL).values
+                )
             )
         ).long().clone().transpose(0, 1)
 

@@ -1,12 +1,12 @@
 mlflow:
   experiment_name: duration - v2
-  run_name: final model
+  run_name: final model - compressed chords
 
 dataset:
   encoding_type: duration
   polyphonic: False
-  chord_encoding_type: extended
-  chord_extension_count: 7
+  chord_encoding_type: compressed
+  chord_extension_count: 12
   transpose_mode: all
 #  sequence_size: 193
   sequence_size: 41

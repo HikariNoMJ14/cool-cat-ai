@@ -161,7 +161,7 @@ def evaluate_duration_melody(filepath, corpus_sequences=None, n_measures=None):
     return results
 
 
-def evaluate_model(model, generator, logger, n_measures=8, unseen=False, n_samples=100):
+def evaluate_model(model, generator, logger, n_measures=None, unseen=False, n_samples=100):
     metrics = {}
 
     # corpus_sequences = None

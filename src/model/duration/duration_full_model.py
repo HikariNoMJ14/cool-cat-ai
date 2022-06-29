@@ -168,7 +168,7 @@ class DurationFullModel(DurationChordModel):
         past_pitches = self.extract_features(past, 'pitch', 1)
         past_durations = self.extract_features(past, 'duration', 2)
         past_durations = self.convert_durations_to_ids(past_durations)
-        past_chord_pitches = self.extract_chords(past, (3, 10))
+        past_chord_pitches = self.extract_chords(past, (3, 3 + self.chord_extension_count))
 
         assert past_offsets.max() <= self.offset_size
         assert past_pitches.max() <= self.pitch_size
@@ -190,7 +190,7 @@ class DurationFullModel(DurationChordModel):
     def prepare_present_nn_input(self, present):
         # Extract features from present tensor
         present_offsets = self.extract_features(present, 'offset', 0)  # TODO fix
-        present_chord_pitches = self.extract_chords(present, (1, 8))
+        present_chord_pitches = self.extract_chords(present, (1, 1 + self.chord_extension_count))
 
         # Encode present features
         present_offset_embedding = self.offset_encoder(present_offsets)
@@ -208,7 +208,7 @@ class DurationFullModel(DurationChordModel):
         future_pitches = self.extract_features(future, 'pitch', 1)
         future_durations = self.extract_features(future, 'duration', 2)
         future_durations = self.convert_durations_to_ids(future_durations)
-        future_chord_pitches = self.extract_chords(future, (3, 10))
+        future_chord_pitches = self.extract_chords(future, (3, 3 + self.chord_extension_count))
 
         # Encode future features
         future_offset_embedding = self.offset_encoder(future_offsets)
@@ -300,7 +300,7 @@ class DurationFullModel(DurationChordModel):
         past_improvised_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
                                           for feature in self.FEATURES['past_improvised']]
         past_improvised_tensor_indices += self.chord_tensor_idx
-        past_improvised_tensor_indices = [0, 1, 2] + list(range(4, 11))  # TODO fix!!!
+        past_improvised_tensor_indices = [0, 1, 2] + list(range(4, 4 + self.chord_extension_count))  # TODO fix!!!
         past_improvised = self.mask_entry(
             improvised_batch[:, :middle_tick, :],
             past_improvised_tensor_indices,
@@ -319,7 +319,7 @@ class DurationFullModel(DurationChordModel):
         past_original_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
                                         for feature in self.FEATURES['past_original']]
         past_original_tensor_indices += self.chord_tensor_idx
-        past_original_tensor_indices = [0, 1, 2] + list(range(4, 11))  # TODO fix!!!
+        past_original_tensor_indices = [0, 1, 2] + list(range(4, 4 + self.chord_extension_count))  # TODO fix!!!
         past_original = self.mask_entry(
             original_batch[:, :middle_tick, :],
             past_original_tensor_indices,
@@ -330,7 +330,7 @@ class DurationFullModel(DurationChordModel):
         present_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
                                   for feature in self.FEATURES['present']]
         present_tensor_indices += self.chord_tensor_idx
-        present_tensor_indices = [0] + list(range(3, 11))  # TODO fix!!!
+        present_tensor_indices = [0] + [3] + list(range(4, 4 + self.chord_extension_count))  # TODO fix!!!
         present = self.mask_entry(
             improvised_batch[:, middle_tick:middle_tick + 1, :],
             present_tensor_indices,
@@ -345,7 +345,7 @@ class DurationFullModel(DurationChordModel):
         future_tensor_indices = [self.TENSOR_IDX_MAPPING[feature]
                                  for feature in self.FEATURES['future']]
         future_tensor_indices += self.chord_tensor_idx
-        future_tensor_indices = [0, 1, 2] + list(range(4, 11))  # TODO fix!!!
+        future_tensor_indices = [0, 1, 2] + list(range(4, 4 + self.chord_extension_count))  # TODO fix!!!
         future = self.mask_entry(
             reversed_tensor,
             future_tensor_indices,

@@ -634,6 +634,9 @@ def calculate_HC(melody):
 
 
 def calculate_silence_ratio(melody_data, n_measures):
+    if melody_data[melody_data['pitch'] > -1].shape[0] == 0:
+        return 0
+
     return 1 - (melody_data[melody_data['pitch'] > -1]['duration'].sum() / (n_measures * TICKS_PER_MEASURE))
 
 
