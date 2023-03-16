@@ -176,7 +176,7 @@ class DurationChordModel(DurationBaseModel, ChordModel):
         merge_nn_output = self.merge_nn(merge_nn_input)
 
         output_improvised_pitch = self.pitch_decoder(torch.sigmoid(merge_nn_output[:, :self.embedding_size]))
-        output_improvised_duration = self.duration_decoder(torch.sigmoid(merge_nn_output[:, :self.embedding_size]))
+        output_improvised_duration = self.duration_decoder(torch.sigmoid(merge_nn_output[:, self.embedding_size:]))
 
         if self.normalize:
             output_improvised_pitch = F.normalize(output_improvised_pitch, p=2, dim=1)
